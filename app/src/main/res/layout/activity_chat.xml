@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Nextcloud Talk - Android Client
+  ~
+  ~ SPDX-FileCopyrightText: 2023 Julius Linus <juliuslinus1@gmail.com>
+  ~ SPDX-FileCopyrightText: 2021 Andy Scherzinger <info@andy-scherzinger.de>
+  ~ SPDX-FileCopyrightText: 2017-2018 Mario Danic <mario@lovelyhq.com>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/chat_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_default"
+    android:orientation="vertical"
+    tools:ignore="Overdraw">
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/chatToolbarComposeView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/chatEmptyStateComposeView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/conversationDeleteNoticeComposeView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:layout_marginStart="@dimen/standard_quarter_margin"
+            android:layout_marginEnd="@dimen/standard_quarter_margin"
+            android:layout_marginTop="@dimen/standard_quarter_margin" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <androidx.compose.ui.platform.ComposeView
+                android:id="@+id/messagesListViewCompose"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+
+        </FrameLayout>
+
+
+        <LinearLayout
+            android:id="@+id/chat_overflow_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <androidx.compose.ui.platform.ComposeView
+                android:id="@+id/upcomingEventComposeView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/standard_quarter_margin"
+                android:layout_marginEnd="@dimen/standard_quarter_margin"
+                android:layout_marginTop="@dimen/standard_quarter_margin" />
+
+            <LinearLayout
+                android:id="@+id/pinnedMessageContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/standard_quarter_padding"
+                android:visibility="gone"
+                android:background="@color/transparent"
+                tools:visibility="visible">
+
+                <androidx.compose.ui.platform.ComposeView
+                    android:id="@+id/pinnedMessageComposeView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/bg_default">
+
+                <androidx.compose.ui.platform.ComposeView
+                    android:id="@+id/outOfOfficeComposeView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:layout_marginStart="@dimen/standard_quarter_margin"
+                    android:layout_marginEnd="@dimen/standard_quarter_margin"
+                    android:layout_marginTop="@dimen/standard_quarter_margin" />
+
+            </LinearLayout>
+        </LinearLayout>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/voice_recording_lock"
+            android:layout_width="@dimen/min_size_clickable_area"
+            android:layout_height="@dimen/min_size_clickable_area"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentBottom="true"
+            android:layout_marginEnd="@dimen/standard_margin"
+            android:layout_marginBottom="@dimen/standard_margin"
+            android:contentDescription="@string/continuous_voice_message_recording"
+            android:visibility="gone"
+            app:fabCustomSize="@dimen/min_size_clickable_area"
+            app:srcCompat="@drawable/ic_lock_open_grey600_24dp" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/typingIndicatorComposeView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true" />
+
+    </RelativeLayout>
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragment_container_activity_chat"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="0dp"
+        />
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/generic_compose_view"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/send_schedule_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+</LinearLayout>

@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Nextcloud Talk - Android Client
+  ~
+  ~ SPDX-FileCopyrightText: 2021-2025 Andy Scherzinger <info@andy-scherzinger.de>
+  ~ SPDX-FileCopyrightText: 2021 Marcel Hibbe <dev@mhibbe.de>
+  ~ SPDX-FileCopyrightText: 2017-2018 Mario Danic <mario@lovelyhq.com>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layoutDirection="ltr"
+        android:orientation="vertical">
+
+        <include
+            layout="@layout/item_message_quote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginEnd="10dp"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layoutDirection="ltr">
+
+            <ImageButton
+                android:id="@+id/attachmentButton"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_alignBottom="@id/messageInput"
+                android:background="@color/transparent"
+                android:contentDescription="@string/nc_add_attachment"
+                android:gravity="bottom"
+                android:src="@drawable/ic_baseline_attach_file_24"
+                app:tint="?attr/colorControlNormal" />
+
+            <ImageButton
+                android:id="@+id/smileyButton"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_alignBottom="@id/messageInput"
+                android:layout_toEndOf="@id/attachmentButton"
+                android:background="@color/transparent"
+                android:contentDescription="@string/nc_add_emojis"
+                android:gravity="bottom"
+                android:src="@drawable/ic_insert_emoticon_black_24dp"
+                app:tint="?attr/colorControlNormal" />
+
+            <com.nextcloud.talk.utils.ImageEmojiEditText
+                android:id="@+id/messageInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerHorizontal="true"
+                android:layout_marginEnd="48dp"
+                android:layout_toEndOf="@id/smileyButton"
+                android:background="@null"
+                android:imeOptions="actionDone"
+                android:inputType="textAutoCorrect|textMultiLine|textCapSentences"
+                android:layoutDirection="locale"
+                android:lineSpacingMultiplier="1.2"
+                android:minHeight="@dimen/min_size_clickable_area"
+                android:paddingHorizontal="@dimen/zero"
+                android:textAlignment="viewStart"
+                android:hint="@string/nc_hint_enter_a_message"
+                android:scrollbars="vertical"
+                android:scrollbarStyle="insideInset"
+                android:isScrollContainer="true"/>
+
+            <TextView
+                android:id="@+id/slideToCancelDescription"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:translationX="30dp"
+                android:text="@string/nc_voice_message_slide_to_cancel"
+                android:textAlignment="viewStart"
+                android:textColor="?attr/colorControlNormal"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <ImageView
+                android:id="@+id/microphoneEnabledInfoBackground"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_alignParentStart="true"
+                android:background="@color/bg_message_list_incoming_bubble"
+                android:contentDescription="@null"
+                android:scaleType="centerInside"
+                android:visibility="gone"
+                tools:visibility="gone" />
+
+            <com.nextcloud.talk.ui.MicInputCloud
+                android:id="@+id/micInputCloud"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/audioRecordDuration"
+                android:layout_centerInParent="true"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:visibility="gone"
+                app:pauseIcon="@drawable/baseline_stop_24"
+                app:playIcon="@drawable/ic_refresh" />
+
+            <ImageView
+                android:id="@+id/deleteVoiceRecording"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_below="@id/audioRecordDuration"
+                android:layout_alignBottom="@id/micInputCloud"
+                android:layout_alignParentStart="true"
+                android:layout_marginVertical="@dimen/standard_margin"
+                android:layout_marginStart="@dimen/standard_double_margin"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/delete_voice_recording"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_delete"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/sendVoiceRecording"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_below="@id/audioRecordDuration"
+                android:layout_alignBottom="@id/micInputCloud"
+                android:layout_alignParentEnd="true"
+                android:layout_marginVertical="@dimen/standard_margin"
+                android:layout_marginEnd="@dimen/standard_double_margin"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/nc_send_voice_recording"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_send_24px"
+                android:visibility="gone" />
+
+            <!-- the height of this ImageView is used to define the overall height of the
+             parent layout whenever the voice recording mode is enabled. parent layout has
+             height=wrap_content because it must enlarge whenever user types a message with
+              linebreaks. -->
+            <ImageView
+                android:id="@+id/microphoneEnabledInfo"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_alignParentStart="true"
+                android:contentDescription="@string/nc_microphone_enabled_audio_recording"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_baseline_mic_red_24"
+                android:visibility="gone"
+                tools:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/voice_preview_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="@dimen/standard_margin"
+                android:layout_marginTop="@dimen/standard_margin"
+                android:background="@drawable/shape_grouped_outcoming_message"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/playPauseBtn"
+                    style="@style/Widget.AppTheme.Button.IconButton"
+                    android:layout_width="@dimen/min_size_clickable_area"
+                    android:layout_height="@dimen/min_size_clickable_area"
+                    android:layout_marginStart="@dimen/standard_margin"
+                    android:contentDescription="@string/play_pause_voice_message"
+                    android:visibility="gone"
+                    app:cornerRadius="@dimen/button_corner_radius"
+                    app:icon="@drawable/ic_baseline_play_arrow_voice_message_24"
+                    app:iconSize="30dp"
+                    app:iconTint="@color/high_emphasis_text"
+                    app:rippleColor="#1FFFFFFF" />
+
+                <SeekBar
+                    android:id="@+id/seekbar"
+                    style="@style/Nextcloud.Material.Outgoing.SeekBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="@dimen/standard_margin"
+                    android:thumb="@drawable/voice_message_outgoing_seek_bar_slider"
+                    android:visibility="gone"
+                    tools:progress="50" />
+            </LinearLayout>
+
+            <Chronometer
+                android:id="@+id/audioRecordDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_toEndOf="@id/microphoneEnabledInfo"
+                android:paddingStart="5dp"
+                android:paddingEnd="5dp"
+                android:textColor="?attr/colorControlNormal"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/messageSendButton"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_alignBottom="@id/messageInput"
+                android:layout_alignParentEnd="true"
+                android:layout_gravity="bottom"
+                android:adjustViewBounds="true"
+                android:background="@color/transparent"
+                android:contentDescription="@string/nc_description_send_message_button"
+                android:padding="12dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_send_24px" />
+
+            <ImageButton
+                android:id="@+id/scheduledMessagesButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_toStartOf="@id/recordAudioButton"
+                android:background="@color/transparent"
+                android:padding="12dp"
+                android:src="@drawable/outline_schedule_24"
+                android:scaleType="centerCrop"
+                app:tint="?attr/colorControlNormal"
+                android:contentDescription="@string/nc_schedule_message" />
+
+            <ImageButton
+                android:id="@+id/recordAudioButton"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_alignParentEnd="true"
+                android:background="@color/transparent"
+                android:contentDescription="@string/nc_description_record_voice"
+                android:src="@drawable/ic_baseline_mic_24" />
+
+            <ImageButton
+                android:id="@+id/submitThreadButton"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_alignParentEnd="true"
+                android:background="@color/transparent"
+                android:contentDescription="@string/start_thread"
+                android:src="@drawable/outline_forum_24"
+                app:tint="?attr/colorControlNormal"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/editMessageButton"
+                android:layout_width="@dimen/min_size_clickable_area"
+                android:layout_height="@dimen/min_size_clickable_area"
+                android:layout_alignBottom="@id/messageInput"
+                android:layout_alignParentEnd="true"
+                android:background="@color/transparent"
+                android:contentDescription="@string/nc_send_edit_message"
+                android:src="@drawable/ic_check_24"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <Space
+                android:id="@+id/attachmentButtonSpace"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_toEndOf="@id/attachmentButton"
+                android:visibility="gone" />
+
+            <Space
+                android:id="@+id/sendButtonSpace"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_toStartOf="@id/messageSendButton" />
+        </RelativeLayout>
+
+    </LinearLayout>
+
+</merge>

@@ -1,0 +1,17 @@
+<!--
+  ~ Nextcloud Talk - Android Client
+  ~
+  ~ SPDX-FileCopyrightText: 2017-2019 Mario Danic <mario@lovelyhq.com>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<paths>
+    <cache-path
+        name="shared_attachments"
+        path="shared_attachments/" />
+    <cache-path
+        name="photos"
+        path="photos/" />
+    <files-path
+        name="logs"
+        path="logs/" />
+</paths>

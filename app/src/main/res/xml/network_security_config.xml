@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Nextcloud Talk - Android Client
+  ~
+  ~ SPDX-FileCopyrightText: 2017 Mario Danic <mario@lovelyhq.com>
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<network-security-config>
+    <!-- Allowing cleartextTrafficPermitted - we don't control the server yet strongly suggesting TLS/SSL -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+            <!-- We allow user-certificates so managed device can make use of self-signed/client certificates -->
+            <certificates src="user"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
+

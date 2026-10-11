@@ -1,0 +1,129 @@
+/*
+ * Nextcloud Talk - Android Client
+ *
+ * SPDX-FileCopyrightText: 2021-2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+package com.nextcloud.talk.location
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.MaterialTheme
+import androidx.lifecycle.ViewModelProvider
+import autodagger.AutoInjector
+import com.nextcloud.talk.R
+import com.nextcloud.talk.activities.BaseActivity
+import com.nextcloud.talk.application.NextcloudTalkApplication
+import com.nextcloud.talk.components.ColoredStatusBar
+import com.nextcloud.talk.extensions.getParcelableExtraProvider
+import com.nextcloud.talk.location.components.LocationPickerScreen
+import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_CHAT_API_VERSION
+import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_GEOCODING_RESULT
+import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_ROOM_TOKEN
+import com.nextcloud.talk.location.viewmodels.LocationPickerViewModel
+import javax.inject.Inject
+
+private const val MAP_CENTER_LAT_KEY = "mapCenterLat"
+
+private const val MAP_CENTER_LON_KEY = "mapCenterLon"
+
+private const val MOVE_TO_CURRENT_LOCATION_KEY = "moveToCurrentLocation"
+
+private const val GEOCODING_RESULT_KEY = "geocodingResult"
+
+@AutoInjector(NextcloudTalkApplication::class)
+class LocationPickerActivity : BaseActivity() {
+
+    @Inject
+    lateinit var viewModelFactory: ViewModelProvider.Factory
+
+    private lateinit var viewModel: LocationPickerViewModel
+    private lateinit var roomToken: String
+    private var chatApiVersion: Int = 1
+
+    private val geocodingLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val geocodingResult: GeocodingResult? = result.data?.getParcelableExtraProvider(KEY_GEOCODING_RESULT)
+            if (geocodingResult != null) {
+                viewModel.onGeocodingResultReceived(geocodingResult)
+            }
+        }
+    }
+
+    private val onBackPressedCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            setResult(RESULT_CANCELED)
+            finish()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        NextcloudTalkApplication.sharedApplication!!.componentApplication.inject(this)
+
+        roomToken = intent.getStringExtra(KEY_ROOM_TOKEN)!!
+        chatApiVersion = intent.getIntExtra(KEY_CHAT_API_VERSION, 1)
+
+        viewModel = ViewModelProvider(this, viewModelFactory)[LocationPickerViewModel::class.java]
+
+        val geocodingResult: GeocodingResult? = if (savedInstanceState != null) {
+            savedInstanceState.getParcelable(GEOCODING_RESULT_KEY)
+        } else {
+            intent.getParcelableExtraProvider(KEY_GEOCODING_RESULT)
+        }
+
+        val moveToCurrentLocation = savedInstanceState?.getBoolean(MOVE_TO_CURRENT_LOCATION_KEY) ?: true
+        val mapCenterLat = savedInstanceState?.getDouble(MAP_CENTER_LAT_KEY) ?: 0.0
+        val mapCenterLon = savedInstanceState?.getDouble(MAP_CENTER_LON_KEY) ?: 0.0
+
+        viewModel.initialize(
+            LocationPickerViewModel.LocationPickerInitParams(
+                roomToken = roomToken,
+                chatApiVersion = chatApiVersion,
+                geocodingResult = geocodingResult,
+                moveToCurrentLocation = moveToCurrentLocation,
+                mapCenterLat = mapCenterLat,
+                mapCenterLon = mapCenterLon,
+                geocoderBaseUrl = getString(R.string.osm_geocoder_url),
+                geocoderEmail = getString(R.string.osm_geocoder_contact)
+            )
+        )
+
+        onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
+
+        val colorScheme = viewThemeUtils.getColorScheme(this)
+        setContent {
+            MaterialTheme(colorScheme = colorScheme) {
+                ColoredStatusBar()
+                LocationPickerScreen(
+                    viewModel = viewModel,
+                    onSearchClick = { navigateToGeocoding() },
+                    onBack = { onBackPressedDispatcher.onBackPressed() },
+                    onFinish = { finish() }
+                )
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val state = viewModel.uiState.value
+        outState.putBoolean(MOVE_TO_CURRENT_LOCATION_KEY, state.moveToCurrentLocation)
+        outState.putDouble(MAP_CENTER_LAT_KEY, state.mapCenterLat)
+        outState.putDouble(MAP_CENTER_LON_KEY, state.mapCenterLon)
+        outState.putParcelable(GEOCODING_RESULT_KEY, state.geocodingResult)
+    }
+
+    private fun navigateToGeocoding() {
+        val intent = Intent(this, GeocodingActivity::class.java)
+        intent.putExtra(KEY_ROOM_TOKEN, roomToken)
+        intent.putExtra(KEY_CHAT_API_VERSION, chatApiVersion)
+        geocodingLauncher.launch(intent)
+    }
+}

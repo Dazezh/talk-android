@@ -1,0 +1,272 @@
+/*
+ * Nextcloud Talk - Android Client
+ *
+ * SPDX-FileCopyrightText: 2021 Andy Scherzinger <info@andy-scherzinger.de>
+ * SPDX-FileCopyrightText: 2021 Marcel Hibbe <dev@mhibbe.de>
+ * SPDX-FileCopyrightText: 2021 Stefan Niedermann <info@niedermann.it>
+ * SPDX-FileCopyrightText: 2020 Chris Narkiewicz <hello@ezaquarii.com>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+package com.nextcloud.talk.utils
+
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.util.Log
+import android.webkit.MimeTypeMap
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.math.BigInteger
+import java.security.MessageDigest
+
+object FileUtils {
+    private val TAG = FileUtils::class.java.simpleName
+    private const val RADIX: Int = 16
+    private const val MD5_LENGTH: Int = 32
+    private const val SHARED_ATTACHMENTS_DIRECTORY = "shared_attachments"
+
+    /**
+     * Returns the dedicated cache directory used for externally shared attachments.
+     */
+    fun getSharedAttachmentsDirectory(cacheDir: File): File? {
+        val directory = File(cacheDir, SHARED_ATTACHMENTS_DIRECTORY)
+        if (directory.exists()) {
+            return if (directory.isDirectory) directory else null
+        }
+        return if (directory.mkdirs()) directory else null
+    }
+
+    /**
+     * Resolves a shared attachment file inside the dedicated cache directory.
+     */
+    fun resolveSharedAttachmentFile(cacheDir: File, untrustedFileName: String?): File? {
+        val sharedDirectory = getSharedAttachmentsDirectory(cacheDir) ?: return null
+        return resolveFileInDirectory(sharedDirectory, untrustedFileName)
+    }
+
+    /**
+     * Resolves a shared attachment file inside a per-[fileId] subdirectory of the dedicated cache
+     * directory. [untrustedFileName] alone is sender-controlled and not unique - two different
+     * attachments (e.g. two pasted screenshots both named "image.png") can share it, which would
+     * otherwise let concurrent downloads (see MediaViewerViewModel's prefetch) resolve to, and
+     * overwrite, the very same cache file. Nesting under the server-assigned [fileId] keeps every
+     * attachment's cache slot unique regardless of what its sender named it.
+     */
+    fun resolveSharedAttachmentFile(cacheDir: File, fileId: String, untrustedFileName: String?): File? {
+        val sharedDirectory = getSharedAttachmentsDirectory(cacheDir) ?: return null
+        val fileIdDirectory = resolveFileInDirectory(sharedDirectory, fileId) ?: return null
+        if (!fileIdDirectory.exists() && !fileIdDirectory.mkdirs()) return null
+        return resolveFileInDirectory(fileIdDirectory, untrustedFileName)
+    }
+
+    /**
+     * Resolves an untrusted file name inside [baseDirectory] and rejects traversal attempts.
+     */
+    fun resolveFileInDirectory(baseDirectory: File, untrustedFileName: String?): File? {
+        val fileName = untrustedFileName?.trim().orEmpty()
+        val isSimpleFileName = fileName.isNotEmpty() &&
+            fileName != "." &&
+            fileName != ".." &&
+            !fileName.contains('/') &&
+            !fileName.contains('\\') &&
+            File(fileName).name == fileName
+
+        val resolvedFile = if (isSimpleFileName) {
+            val canonicalBase = baseDirectory.canonicalFile
+            val candidate = File(canonicalBase, fileName).canonicalFile
+            if (candidate.path.startsWith(canonicalBase.path + File.separator)) {
+                candidate
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+        return resolvedFile
+    }
+
+    /**
+     * Creates a new [File]
+     */
+    @Suppress("ThrowsCount")
+    @JvmStatic
+    fun getTempCacheFile(context: Context, fileName: String): File {
+        val cacheRoot = context.applicationContext.cacheDir.canonicalFile
+        val cacheFile = File(cacheRoot, fileName).canonicalFile
+        if (!cacheFile.path.startsWith(cacheRoot.path + File.separator)) {
+            throw IOException("Temporary file must stay inside cache directory.")
+        }
+        Log.v(TAG, "Full path for new cache file:" + cacheFile.absolutePath)
+        val tempDir = cacheFile.parentFile ?: throw FileNotFoundException("could not cacheFile.getParentFile()")
+        if (!tempDir.exists()) {
+            Log.v(
+                TAG,
+                "The folder in which the new file should be created does not exist yet. Trying to create it…"
+            )
+            if (tempDir.mkdirs()) {
+                Log.v(TAG, "Creation successful")
+            } else {
+                throw IOException("Directory for temporary file does not exist and could not be created.")
+            }
+        }
+        Log.v(TAG, "- Try to create actual cache file")
+        if (cacheFile.createNewFile()) {
+            Log.v(TAG, "Successfully created cache file")
+        } else {
+            throw IOException("Failed to create cacheFile")
+        }
+        return cacheFile
+    }
+
+    /**
+     * Creates a new [File]
+     */
+    fun removeTempCacheFile(context: Context, fileName: String) {
+        val cacheRoot = context.applicationContext.cacheDir.canonicalFile
+        val cacheFile = File(cacheRoot, fileName).canonicalFile
+        if (!cacheFile.path.startsWith(cacheRoot.path + File.separator)) {
+            throw IOException("Temporary file must stay inside cache directory.")
+        }
+        Log.v(TAG, "Full path for new cache file:" + cacheFile.absolutePath)
+        if (cacheFile.exists()) {
+            if (cacheFile.delete()) {
+                Log.v(TAG, "Deletion successful")
+            } else {
+                throw IOException("Directory for temporary file does not exist and could not be created.")
+            }
+        }
+    }
+
+    @Suppress("ThrowsCount")
+    fun getFileFromUri(context: Context, sourceFileUri: Uri): File? {
+        val fileName = getFileName(sourceFileUri, context)
+        val scheme = sourceFileUri.scheme
+
+        val file = if (scheme == null) {
+            Log.d(TAG, "relative uri: " + sourceFileUri.path)
+            throw IllegalArgumentException("relative paths are not supported")
+        } else if (ContentResolver.SCHEME_CONTENT == scheme) {
+            copyFileToCache(context, sourceFileUri, fileName)
+        } else if (ContentResolver.SCHEME_FILE == scheme) {
+            val path = sourceFileUri.path
+                ?: throw IllegalArgumentException("uri does not contain path")
+            val cacheRoot = context.applicationContext.cacheDir.canonicalFile
+            val candidate = File(path).canonicalFile
+            if (candidate.path.startsWith(cacheRoot.path + File.separator)) {
+                candidate
+            } else {
+                Log.w(TAG, "Rejecting file:// uri outside of the app cache directory.")
+                null
+            }
+        } else {
+            throw IllegalArgumentException("unsupported scheme: " + sourceFileUri.path)
+        }
+        return file
+    }
+
+    @Suppress("NestedBlockDepth")
+    fun copyFileToCache(context: Context, sourceFileUri: Uri, filename: String): File? {
+        val cachedFile = File(context.cacheDir, filename)
+
+        if (!cachedFile.toPath().normalize().startsWith(context.cacheDir.toPath())) {
+            Log.w(TAG, "cachedFile was not created in cacheDir. Aborting for security reasons.")
+            cachedFile.delete()
+            return null
+        }
+
+        if (cachedFile.exists()) {
+            Log.d(TAG, "file is already in cache")
+        } else {
+            val outputStream = FileOutputStream(cachedFile)
+            try {
+                val inputStream: InputStream? = context.contentResolver.openInputStream(sourceFileUri)
+                inputStream?.use { input ->
+                    outputStream.use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                outputStream.flush()
+            } catch (e: FileNotFoundException) {
+                Log.w(TAG, "failed to copy file to cache", e)
+            } catch (e: SecurityException) {
+                // Most notably the system Photo Picker's ephemeral uris, whose read grant can be
+                // revoked at any point after it was first handed to us, well before we're done
+                // using it - this must never crash the caller, just leave the file uncopied.
+                Log.w(TAG, "no longer permitted to read $sourceFileUri", e)
+            }
+        }
+        return cachedFile
+    }
+
+    fun getFileName(uri: Uri, context: Context?): String {
+        var filename: String? = null
+        if (uri.scheme == "content" && context != null) {
+            filename = queryDisplayName(context, uri)
+        }
+        // if it was no content uri (or the query above couldn't read one), read filename from path
+        if (filename == null) {
+            filename = uri.path
+        }
+
+        val lastIndexOfSlash = filename!!.lastIndexOf('/')
+        if (lastIndexOfSlash != -1) {
+            filename = filename.substring(lastIndexOfSlash + 1)
+        }
+
+        return filename
+    }
+
+    // The content provider behind a uri (most notably the system Photo Picker's ephemeral uris)
+    // can revoke read access at any point after it was first granted, turning a plain metadata
+    // query into a SecurityException well after the uri was handed to us - this must never crash
+    // the caller, just fall back to deriving the filename from the uri's own path instead.
+    @Suppress("TooGenericExceptionCaught")
+    private fun queryDisplayName(context: Context, uri: Uri): String? =
+        try {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val displayNameColumnIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (cursor.moveToFirst() && displayNameColumnIndex != -1) {
+                    cursor.getString(displayNameColumnIndex)
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to query display name for $uri", e)
+            null
+        }
+
+    /**
+     * Resolves the MIME type of [uri]. [ContentResolver.getType] only resolves `content://` URIs, so for
+     * `file://` URIs (e.g. the in-app camera writes plain files) this falls back to guessing from the
+     * file extension. Also falls back there if the provider's read grant for [uri] was revoked in the
+     * meantime (most notably the system Photo Picker's ephemeral uris) - never lets that crash the caller.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    fun resolveMimeType(context: Context, uri: Uri): String? =
+        try {
+            context.contentResolver.getType(uri)
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to resolve mime type for $uri", e)
+            null
+        } ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(
+            MimeTypeMap.getFileExtensionFromUrl(uri.toString()).lowercase()
+        )
+
+    @JvmStatic
+    fun md5Sum(file: File): String {
+        val temp = file.name + file.lastModified() + file.length()
+        val messageDigest = MessageDigest.getInstance("MD5")
+        messageDigest.update(temp.toByteArray())
+        val digest = messageDigest.digest()
+        val md5String = StringBuilder(BigInteger(1, digest).toString(RADIX))
+        while (md5String.length < MD5_LENGTH) {
+            md5String.insert(0, "0")
+        }
+        return md5String.toString()
+    }
+}

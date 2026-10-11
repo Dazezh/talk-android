@@ -1,0 +1,490 @@
+/*
+ * Nextcloud Talk - Android Client
+ *
+ * SPDX-FileCopyrightText: 2022 Marcel Hibbe <dev@mhibbe.de>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+package com.nextcloud.talk.utils
+
+import android.annotation.SuppressLint
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.util.Log
+import android.view.View
+import android.widget.ImageView
+import android.widget.ProgressBar
+import androidx.compose.runtime.MutableState
+import androidx.core.content.FileProvider
+import androidx.core.net.toUri
+import androidx.emoji2.widget.EmojiTextView
+import androidx.lifecycle.Observer
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequest
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import com.google.android.material.snackbar.Snackbar
+import com.nextcloud.talk.R
+import com.nextcloud.talk.application.NextcloudTalkApplication
+import com.nextcloud.talk.chat.data.model.ChatMessage
+import com.nextcloud.talk.data.user.model.User
+import com.nextcloud.talk.fullscreenfile.FullScreenMediaActivity
+import com.nextcloud.talk.fullscreenfile.FullScreenTextViewerActivity
+import com.nextcloud.talk.jobs.DownloadFileToCacheWorker
+import com.nextcloud.talk.mediaviewer.activities.MediaViewerActivity
+import com.nextcloud.talk.mediaviewer.model.MediaViewerItem
+import com.nextcloud.talk.utils.AccountUtils.canWeOpenFilesApp
+import com.nextcloud.talk.utils.Mimetype.AUDIO_MPEG
+import com.nextcloud.talk.utils.Mimetype.AUDIO_OGG
+import com.nextcloud.talk.utils.Mimetype.AUDIO_WAV
+import com.nextcloud.talk.utils.Mimetype.IMAGE_GIF
+import com.nextcloud.talk.utils.Mimetype.IMAGE_HEIC
+import com.nextcloud.talk.utils.Mimetype.IMAGE_JPEG
+import com.nextcloud.talk.utils.Mimetype.IMAGE_PNG
+import com.nextcloud.talk.utils.Mimetype.IMAGE_PREFIX
+import com.nextcloud.talk.utils.Mimetype.TEXT_MARKDOWN
+import com.nextcloud.talk.utils.Mimetype.TEXT_PLAIN
+import com.nextcloud.talk.utils.Mimetype.VIDEO_MP4
+import com.nextcloud.talk.utils.Mimetype.VIDEO_OGG
+import com.nextcloud.talk.utils.Mimetype.VIDEO_PREFIX
+import com.nextcloud.talk.utils.Mimetype.VIDEO_QUICKTIME
+import com.nextcloud.talk.utils.Mimetype.VIDEO_WEBM
+import com.nextcloud.talk.utils.MimetypeUtils.isAudioOnly
+import com.nextcloud.talk.utils.MimetypeUtils.isMarkdown
+import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_ACCOUNT
+import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_FILE_ID
+import java.util.concurrent.ExecutionException
+
+/*
+ * Usage of this class forces us to do things at one location which should be separated in a activity and view model.
+ *
+ * Example:
+ *   - SharedItemsViewHolder
+ */
+@Suppress("TooManyFunctions")
+class FileViewerUtils(private val context: Context, private val user: User) {
+
+    fun openFile(
+        message: ChatMessage,
+        openWhenDownloadState: MutableState<Boolean>,
+        downloadState: MutableState<List<String>>
+    ) {
+        val mimetype = message.fileParameters.mimetype
+
+        val isViewableMedia = mimetype.startsWith(IMAGE_PREFIX) || mimetype.startsWith(VIDEO_PREFIX)
+        if (isViewableMedia) {
+            openInMediaViewer(message)
+            return
+        }
+
+        val fileName = message.fileParameters.name
+        val link = message.fileParameters.link
+
+        val fileId = message.fileParameters.id
+        val path = message.fileParameters.path
+
+        val fileSize = message.fileParameters.size
+
+        openFile(
+            FileInfo(fileId, fileName, fileSize, path, link, mimetype),
+            openWhenDownloadState,
+            downloadState
+        )
+    }
+
+    private fun openInMediaViewer(message: ChatMessage) {
+        val fileParameters = message.fileParameters
+        val fileId = fileParameters.id
+        val roomToken = message.token
+        if (fileId == null || roomToken == null) {
+            Log.e(TAG, "Missing fileId or roomToken, can't open in media viewer")
+            return
+        }
+
+        val previewUrl = user.baseUrl?.let {
+            ApiUtils.getUrlForFilePreviewWithFileId(
+                it,
+                fileId,
+                context.resources.getDimensionPixelSize(R.dimen.maximum_file_preview_size)
+            )
+        }
+        val item = MediaViewerItem(
+            messageId = message.jsonMessageId.toLong(),
+            referenceId = message.referenceId,
+            fileId = fileId,
+            fileName = fileParameters.name.orEmpty(),
+            mimeType = fileParameters.mimetype.orEmpty(),
+            path = fileParameters.path.orEmpty(),
+            link = fileParameters.link.orEmpty(),
+            fileSize = fileParameters.size ?: 0L,
+            previewUrl = previewUrl,
+            actorDisplayName = message.actorDisplayName.orEmpty(),
+            timestamp = message.timestamp
+        )
+        context.startActivity(MediaViewerActivity.newIntent(context, roomToken, listOf(item), item.messageId))
+    }
+
+    fun openFile(
+        fileInfo: FileInfo,
+        openWhenDownloadState: MutableState<Boolean>,
+        downloadState: MutableState<List<String>>? = null
+    ) {
+        val safeFile = FileUtils.resolveSharedAttachmentFile(context.cacheDir, fileInfo.fileName)
+        if (safeFile == null) {
+            NextcloudTalkApplication.sharedApplication?.logger?.e(
+                TAG,
+                "Refused to open file with unsafe name: ${fileInfo.fileName}"
+            )
+            Snackbar.make(View(context), R.string.nc_common_error_sorry, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        val safeFileInfo = fileInfo.copy(fileName = safeFile.name)
+
+        if (isSupportedForInternalViewer(safeFileInfo.mimetype) ||
+            canBeHandledByExternalApp(safeFileInfo.mimetype, safeFileInfo.fileName)
+        ) {
+            openOrDownloadFile(
+                safeFileInfo,
+                openWhenDownloadState,
+                downloadState
+            )
+        } else if (!safeFileInfo.link.isNullOrEmpty()) {
+            openFileInFilesApp(safeFileInfo.link, safeFileInfo.fileId)
+        } else {
+            NextcloudTalkApplication.sharedApplication?.logger?.e(
+                TAG,
+                "File with id " + safeFileInfo.fileId + " can't be opened because internal viewer doesn't " +
+                    "support it, it can't be handled by an external app and there is no link " +
+                    "to open it in the nextcloud files app"
+            )
+            Snackbar.make(View(context), R.string.nc_common_error_sorry, Snackbar.LENGTH_LONG).show()
+        }
+    }
+
+    private fun canBeHandledByExternalApp(mimetype: String?, fileName: String): Boolean {
+        val file = FileUtils.resolveSharedAttachmentFile(context.cacheDir, fileName) ?: return false
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.setDataAndType(Uri.fromFile(file), mimetype)
+        return intent.resolveActivity(context.packageManager) != null
+    }
+
+    private fun openOrDownloadFile(
+        fileInfo: FileInfo,
+        openWhenDownloadState: MutableState<Boolean>,
+        downloadState: MutableState<List<String>>?
+    ) {
+        val file = FileUtils.resolveSharedAttachmentFile(context.cacheDir, fileInfo.fileName)
+        if (file == null) {
+            NextcloudTalkApplication.sharedApplication?.logger?.e(
+                TAG,
+                "Refused to open file with unsafe name: ${fileInfo.fileName}"
+            )
+            Snackbar.make(View(context), R.string.nc_common_error_sorry, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        if (file.exists()) {
+            openFileByMimetype(fileInfo.fileName, fileInfo.mimetype, fileInfo.link, fileInfo.fileId)
+        } else {
+            downloadFileToCache(
+                fileInfo,
+                openWhenDownloadState,
+                downloadState
+            )
+        }
+    }
+
+    private fun openFileByMimetype(filename: String, mimetype: String?, link: String? = null, fileId: String = "") {
+        if (mimetype != null) {
+            when (mimetype) {
+                AUDIO_MPEG,
+                AUDIO_WAV,
+                AUDIO_OGG -> openAudioView(filename, mimetype)
+
+                // Reachable only if a future caller ends up here without the message/room context
+                // openFile(ChatMessage, ...) needs to route video to the media viewer instead - see
+                // openVideoInMediaViewer(). Kept as a safety net so video is never left unopenable.
+                VIDEO_MP4,
+                VIDEO_QUICKTIME,
+                VIDEO_OGG,
+                VIDEO_WEBM -> openVideoView(filename, mimetype)
+
+                TEXT_MARKDOWN,
+                TEXT_PLAIN -> openTextView(filename, mimetype, link, fileId)
+
+                else -> openFileByExternalApp(filename, mimetype)
+            }
+        } else {
+            NextcloudTalkApplication.sharedApplication?.logger?.e(TAG, "can't open file with unknown mimetype")
+            Snackbar.make(View(context), R.string.nc_common_error_sorry, Snackbar.LENGTH_LONG).show()
+        }
+    }
+
+    @Suppress("Detekt.TooGenericExceptionCaught")
+    private fun openFileByExternalApp(fileName: String, mimetype: String) {
+        val file = FileUtils.resolveSharedAttachmentFile(context.cacheDir, fileName)
+        if (file == null) {
+            NextcloudTalkApplication.sharedApplication?.logger?.e(
+                TAG,
+                "Refused to share file with unsafe name: $fileName"
+            )
+            Snackbar.make(View(context), R.string.nc_common_error_sorry, Snackbar.LENGTH_LONG).show()
+            return
+        }
+        val intent = Intent()
+        intent.action = Intent.ACTION_VIEW
+        val pdfURI = FileProvider.getUriForFile(context, context.packageName, file)
+        intent.setDataAndType(pdfURI, mimetype)
+        intent.flags = Intent.FLAG_ACTIVITY_NO_HISTORY
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+        try {
+            if (intent.resolveActivity(context.packageManager) != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } else {
+                Log.e(TAG, "No Application found to open the file. This should have been handled beforehand!")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error while opening file", e)
+        }
+    }
+
+    fun openFileInFilesApp(link: String, keyID: String) {
+        val accountString = user.username + "@" +
+            user.baseUrl
+                ?.replace("https://", "")
+                ?.replace("http://", "")
+
+        if (canWeOpenFilesApp(context, accountString)) {
+            val filesAppIntent = Intent(Intent.ACTION_VIEW, null)
+            val componentName = ComponentName(
+                context.getString(R.string.nc_import_accounts_from),
+                "com.owncloud.android.ui.activity.FileDisplayActivity"
+            )
+            filesAppIntent.component = componentName
+            filesAppIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            filesAppIntent.setPackage(context.getString(R.string.nc_import_accounts_from))
+            filesAppIntent.putExtra(KEY_ACCOUNT, accountString)
+            filesAppIntent.putExtra(KEY_FILE_ID, keyID)
+            context.startActivity(filesAppIntent)
+        } else {
+            val browserIntent = Intent(
+                Intent.ACTION_VIEW,
+                link.toUri()
+            )
+            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(browserIntent)
+        }
+    }
+
+    private fun openAudioView(filename: String, mimetype: String) {
+        val fullScreenMediaIntent = Intent(context, FullScreenMediaActivity::class.java)
+        fullScreenMediaIntent.putExtra("FILE_NAME", filename)
+        fullScreenMediaIntent.putExtra("AUDIO_ONLY", isAudioOnly(mimetype))
+        context.startActivity(fullScreenMediaIntent)
+    }
+
+    private fun openVideoView(filename: String, mimetype: String) {
+        val fullScreenMediaIntent = Intent(context, FullScreenMediaActivity::class.java)
+        fullScreenMediaIntent.putExtra("FILE_NAME", filename)
+        fullScreenMediaIntent.putExtra("AUDIO_ONLY", isAudioOnly(mimetype))
+        context.startActivity(fullScreenMediaIntent)
+    }
+
+    private fun openTextView(filename: String, mimetype: String, link: String?, fileId: String) {
+        val fullScreenTextViewerIntent = Intent(context, FullScreenTextViewerActivity::class.java)
+        fullScreenTextViewerIntent.putExtra("FILE_NAME", filename)
+        fullScreenTextViewerIntent.putExtra("IS_MARKDOWN", isMarkdown(mimetype))
+        fullScreenTextViewerIntent.putExtra("FILE_ID", fileId)
+        fullScreenTextViewerIntent.putExtra("LINK", link)
+        fullScreenTextViewerIntent.putExtra("USERNAME", user.username)
+        fullScreenTextViewerIntent.putExtra("BASE_URL", user.baseUrl)
+        context.startActivity(fullScreenTextViewerIntent)
+    }
+
+    fun isSupportedForInternalViewer(mimetype: String?): Boolean =
+        when (mimetype) {
+            IMAGE_PNG,
+            IMAGE_JPEG,
+            IMAGE_HEIC,
+            IMAGE_GIF,
+            AUDIO_MPEG,
+            AUDIO_WAV,
+            AUDIO_OGG,
+            VIDEO_MP4,
+            VIDEO_QUICKTIME,
+            VIDEO_OGG,
+            VIDEO_WEBM,
+            TEXT_MARKDOWN,
+            TEXT_PLAIN -> true
+
+            else -> false
+        }
+
+    @SuppressLint("LongLogTag")
+    private fun downloadFileToCache(
+        fileInfo: FileInfo,
+        openWhenDownloadState: MutableState<Boolean>,
+        downloadState: MutableState<List<String>>?
+    ) {
+        downloadState?.value = downloadState.value + fileInfo.fileId
+
+        // check if download worker is already running
+        val workers = WorkManager.getInstance(context).getWorkInfosByTag(fileInfo.fileId)
+        try {
+            for (workInfo in workers.get()) {
+                if (workInfo.state == WorkInfo.State.RUNNING || workInfo.state == WorkInfo.State.ENQUEUED) {
+                    Log.d(TAG, "Download worker for $fileInfo.fileId is already running or scheduled")
+                    return
+                }
+            }
+        } catch (e: ExecutionException) {
+            Log.e(TAG, "Error when checking if worker already exists", e)
+        } catch (e: InterruptedException) {
+            Log.e(TAG, "Error when checking if worker already exists", e)
+        }
+        val downloadWorker: OneTimeWorkRequest
+
+        val size: Long = if (fileInfo.fileSize == null) {
+            -1
+        } else {
+            fileInfo.fileSize!!
+        }
+
+        val data: Data = Data.Builder()
+            .putString(DownloadFileToCacheWorker.KEY_BASE_URL, user.baseUrl)
+            .putString(DownloadFileToCacheWorker.KEY_USER_ID, user.userId)
+            .putString(
+                DownloadFileToCacheWorker.KEY_ATTACHMENT_FOLDER,
+                CapabilitiesUtil.getAttachmentFolder(user.capabilities!!.spreedCapability!!)
+            )
+            .putString(DownloadFileToCacheWorker.KEY_FILE_NAME, fileInfo.fileName)
+            .putString(DownloadFileToCacheWorker.KEY_FILE_PATH, fileInfo.path)
+            .putLong(DownloadFileToCacheWorker.KEY_FILE_SIZE, size)
+            .build()
+
+        downloadWorker = OneTimeWorkRequest.Builder(DownloadFileToCacheWorker::class.java)
+            .setInputData(data)
+            .addTag(fileInfo.fileId)
+            .setExpeditedIfSupported()
+            .build()
+        WorkManager.getInstance().enqueue(downloadWorker)
+        val liveData = WorkManager.getInstance(context).getWorkInfoByIdLiveData(downloadWorker.id)
+        val observer = object : Observer<WorkInfo?> {
+            override fun onChanged(workInfo: WorkInfo?) {
+                if (workInfo == null) return
+                updateViewsByProgress(
+                    fileInfo.fileName,
+                    fileInfo.mimetype,
+                    workInfo,
+                    openWhenDownloadState,
+                    fileInfo.link,
+                    fileInfo.fileId
+                )
+                if (workInfo.state.isFinished) {
+                    liveData.removeObserver(this)
+                    downloadState?.value = downloadState.value - fileInfo.fileId
+                }
+            }
+        }
+        liveData.observeForever(observer)
+    }
+
+    @Suppress("LongParameterList")
+    private fun updateViewsByProgress(
+        fileName: String,
+        mimetype: String?,
+        workInfo: WorkInfo,
+        // progressUi: ProgressUi,
+        openWhenDownloadState: MutableState<Boolean>,
+        link: String? = null,
+        fileId: String = ""
+    ) {
+        when (workInfo.state) {
+            WorkInfo.State.RUNNING -> {
+                val progress = workInfo.progress.getInt(DownloadFileToCacheWorker.PROGRESS, -1)
+                if (progress > -1) {
+                    // progressUi.messageText?.text = String.format(
+                    //     context.resources.getString(R.string.filename_progress),
+                    //     fileName,
+                    //     progress
+                    // )
+                }
+            }
+
+            WorkInfo.State.SUCCEEDED -> {
+                if (openWhenDownloadState.value) {
+                    openFileByMimetype(fileName, mimetype, link, fileId)
+                } else {
+                    Log.d(
+                        TAG,
+                        "file " + fileName +
+                            " was downloaded but it's not opened because view is not shown on screen or " +
+                            "openWhenDownloaded is false"
+                    )
+                }
+                // progressUi.messageText?.text = fileName
+                // progressUi.progressBar?.visibility = View.GONE
+            }
+
+            WorkInfo.State.FAILED -> {
+                // progressUi.messageText?.text = fileName
+                // progressUi.progressBar?.visibility = View.GONE
+            }
+
+            else -> {
+            }
+        }
+    }
+
+    fun resumeToUpdateViewsByProgress(
+        fileName: String,
+        fileId: String,
+        mimeType: String?,
+        openWhenDownloadState: MutableState<Boolean>,
+        progressUi: ProgressUi
+    ) {
+        val workers = WorkManager.getInstance(context).getWorkInfosByTag(fileId)
+
+        try {
+            for (workInfo in workers.get()) {
+                if (workInfo.state == WorkInfo.State.RUNNING ||
+                    workInfo.state == WorkInfo.State.ENQUEUED
+                ) {
+                    progressUi.progressBar?.visibility = View.VISIBLE
+                    WorkManager
+                        .getInstance(context)
+                        .getWorkInfoByIdLiveData(workInfo.id)
+                        .observeForever { info: WorkInfo? ->
+                            updateViewsByProgress(
+                                fileName,
+                                mimeType,
+                                info!!,
+                                openWhenDownloadState
+                            )
+                        }
+                }
+            }
+        } catch (e: ExecutionException) {
+            Log.e(TAG, "Error when checking if worker already exists", e)
+        } catch (e: InterruptedException) {
+            Log.e(TAG, "Error when checking if worker already exists", e)
+        }
+    }
+
+    data class ProgressUi(val progressBar: ProgressBar?, val messageText: EmojiTextView?, val previewImage: ImageView)
+
+    data class FileInfo(
+        val fileId: String,
+        val fileName: String,
+        var fileSize: Long?,
+        val path: String,
+        val link: String?,
+        val mimetype: String?
+    )
+
+    companion object {
+        private val TAG = FileViewerUtils::class.java.simpleName
+    }
+}

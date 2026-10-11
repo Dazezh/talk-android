@@ -1,0 +1,337 @@
+/*
+ * Nextcloud Talk - Android Client
+ *
+ * SPDX-FileCopyrightText: 2017-2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+package com.nextcloud.talk.application
+
+import android.app.Activity
+import android.app.Application
+import android.content.pm.PackageManager
+import android.os.Build.VERSION.SDK_INT
+import android.os.Build.VERSION_CODES.P
+import android.util.Log
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.emoji2.bundled.BundledEmojiCompatConfig
+import androidx.emoji2.text.EmojiCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.OneTimeWorkRequest
+import androidx.work.PeriodicWorkRequest
+import androidx.work.WorkManager
+import autodagger.AutoComponent
+import autodagger.AutoInjector
+import coil.Coil
+import coil.ImageLoader
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.decode.SvgDecoder
+import coil.memory.MemoryCache
+import coil.util.DebugLogger
+import com.nextcloud.talk.BuildConfig
+import com.nextcloud.talk.account.AccountVerificationActivity
+import com.nextcloud.talk.diagnosis.buildDiagnosisElements
+import com.nextcloud.talk.diagnosis.toMarkdown
+import com.nextcloud.talk.errorhandling.ExceptionHandler
+import com.nextcloud.talk.logger.LoggerImpl
+import com.nextcloud.talk.account.BrowserLoginActivity
+import com.nextcloud.talk.dagger.modules.BusModule
+import com.nextcloud.talk.dagger.modules.ContextModule
+import com.nextcloud.talk.dagger.modules.DaosModule
+import com.nextcloud.talk.dagger.modules.DatabaseModule
+import com.nextcloud.talk.dagger.modules.ManagerModule
+import com.nextcloud.talk.dagger.modules.RepositoryModule
+import com.nextcloud.talk.dagger.modules.RestModule
+import com.nextcloud.talk.dagger.modules.UtilsModule
+import com.nextcloud.talk.dagger.modules.ViewModelModule
+import com.nextcloud.talk.filebrowser.webdav.DavUtils
+import com.nextcloud.talk.jobs.AccountRemovalWorker
+import com.nextcloud.talk.jobs.CapabilitiesWorker
+import com.nextcloud.talk.jobs.SignalingSettingsWorker
+import com.nextcloud.talk.jobs.WebsocketConnectionsWorker
+import com.nextcloud.talk.ui.theme.ThemeModule
+import com.nextcloud.talk.users.UserManager
+import com.nextcloud.talk.utils.ClosedInterfaceImpl
+import com.nextcloud.talk.utils.DeviceUtils
+import com.nextcloud.talk.utils.NotificationUtils
+import com.nextcloud.talk.utils.database.arbitrarystorage.ArbitraryStorageModule
+import com.nextcloud.talk.utils.database.user.UserModule
+import com.nextcloud.talk.utils.preferences.AppPreferences
+import de.cotech.hw.SecurityKeyManager
+import de.cotech.hw.SecurityKeyManagerConfig
+import io.reactivex.exceptions.UndeliverableException
+import io.reactivex.plugins.RxJavaPlugins
+import okhttp3.OkHttpClient
+import org.conscrypt.Conscrypt
+import org.webrtc.PeerConnectionFactory
+import java.io.IOException
+import java.net.SocketException
+import java.security.Security
+import java.util.concurrent.TimeUnit
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@AutoComponent(
+    modules = [
+        BusModule::class,
+        ContextModule::class,
+        DatabaseModule::class,
+        RestModule::class,
+        UserModule::class,
+        ArbitraryStorageModule::class,
+        ViewModelModule::class,
+        RepositoryModule::class,
+        UtilsModule::class,
+        ThemeModule::class,
+        ManagerModule::class,
+        DaosModule::class
+    ]
+)
+@Singleton
+@AutoInjector(NextcloudTalkApplication::class)
+class NextcloudTalkApplication :
+    Application(),
+    LifecycleObserver {
+    //region Fields (components)
+    lateinit var componentApplication: NextcloudTalkApplicationComponent
+        private set
+    //endregion
+
+    //region Getters
+
+    @Inject
+    lateinit var appPreferences: AppPreferences
+
+    @Inject
+    lateinit var okHttpClient: OkHttpClient
+
+    @Inject
+    lateinit var userManager: UserManager
+
+    @Inject
+    lateinit var logger: LoggerImpl
+    //endregion
+
+    //region private methods
+    private fun installExceptionHandler() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Log.d(TAG, "installExceptionHandler: defaultHandler=$defaultHandler")
+        if (defaultHandler != null) {
+            Thread.setDefaultUncaughtExceptionHandler(
+                ExceptionHandler(
+                    context = this,
+                    defaultExceptionHandler = defaultHandler,
+                    diagnosisSupplier = {
+                        buildDiagnosisElements(
+                            context = this,
+                            userManager = userManager,
+                            appPreferences = appPreferences,
+                            logsRepository = logger
+                        ).toMarkdown()
+                    },
+                    logCrash = { msg, t -> logger.e(TAG, msg, t) },
+                    logFlusher = logger::flush
+                )
+            )
+            Log.d(TAG, "ExceptionHandler installed successfully")
+        } else {
+            Log.w(TAG, "No default UncaughtExceptionHandler found — ExceptionHandler NOT installed")
+        }
+    }
+
+    private fun initializeWebRtc() {
+        try {
+            PeerConnectionFactory.initialize(
+                PeerConnectionFactory.InitializationOptions.builder(this)
+                    .createInitializationOptions()
+            )
+        } catch (e: UnsatisfiedLinkError) {
+            Log.w(TAG, e)
+        }
+    }
+
+    //endregion
+
+    //region Overridden methods
+    override fun onCreate() {
+        Log.d(TAG, "onCreate")
+        sharedApplication = this
+
+        // The crash-reporter process only needs to show ShowErrorActivity — skip all heavy
+        // initialization (WebRTC, Room, Dagger) so the error screen can actually render.
+        val currentProcessName = if (SDK_INT >= P) getProcessName() else null
+        Log.d(TAG, "onCreate: processName=$currentProcessName")
+        if (SDK_INT >= P && currentProcessName?.endsWith(":crash") == true) {
+            Log.d(TAG, "Crash process detected — skipping full Application init")
+            return
+        }
+
+        RxJavaPlugins.setErrorHandler { e ->
+            var throwable: Throwable = if (e is UndeliverableException) e.cause ?: e else e
+            if (throwable is IOException || throwable is SocketException) {
+                Log.w(TAG, "Undeliverable network exception ignored", throwable)
+                return@setErrorHandler
+            }
+            Thread.currentThread().uncaughtExceptionHandler
+                ?.uncaughtException(Thread.currentThread(), throwable)
+        }
+
+        val securityKeyManager = SecurityKeyManager.getInstance()
+        val securityKeyConfigBuilder = SecurityKeyManagerConfig.Builder()
+            .setEnableDebugLogging(BuildConfig.DEBUG)
+
+        try {
+            val packageManager = packageManager
+            val activities = packageManager.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES).activities
+            activities?.forEach { activityInfo ->
+                try {
+                    val activityClass = Class.forName(activityInfo.name)
+                    if (activityClass != AccountVerificationActivity::class.java &&
+                        activityClass != BrowserLoginActivity::class.java
+                    ) {
+                        @Suppress("UNCHECKED_CAST")
+                        securityKeyConfigBuilder.addExcludedActivityClass(activityClass as Class<out Activity>)
+                    }
+                } catch (exception: ClassNotFoundException) {
+                    Log.e(TAG, "Couldn't disable activity for security key listener", exception)
+                }
+            }
+        } catch (exception: PackageManager.NameNotFoundException) {
+            Log.e(TAG, "Couldn't disable activities for security key listener", exception)
+        }
+
+        securityKeyManager.init(this, securityKeyConfigBuilder.build())
+        initializeWebRtc()
+        buildComponent()
+        DavUtils.registerCustomFactories()
+
+        Security.insertProviderAt(Conscrypt.newProvider(), 1)
+
+        componentApplication.inject(this)
+        installExceptionHandler()
+
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStop(owner: LifecycleOwner) {
+                val ts = System.currentTimeMillis()
+                Log.d(TAG, "ProcessLifecycle onStop: saving lockTimestamp=$ts")
+                appPreferences.setLockTimestamp(ts)
+                pendingLockCheck = true
+            }
+        })
+
+        Coil.setImageLoader(buildDefaultImageLoader())
+        setAppTheme(appPreferences.theme)
+        super.onCreate()
+
+        ClosedInterfaceImpl().providerInstallerInstallIfNeededAsync()
+        DeviceUtils.ignoreSpecialBatteryFeatures()
+
+        initWorkers()
+
+        val config = BundledEmojiCompatConfig(this)
+        config.setReplaceAll(true)
+        val emojiCompat = EmojiCompat.init(config)
+
+        NotificationUtils.registerNotificationChannels(applicationContext, appPreferences)
+    }
+
+    private fun initWorkers() {
+        val accountRemovalWork = OneTimeWorkRequest.Builder(AccountRemovalWorker::class.java).build()
+        val capabilitiesUpdateWork = OneTimeWorkRequest.Builder(CapabilitiesWorker::class.java).build()
+        val signalingSettingsWork = OneTimeWorkRequest.Builder(SignalingSettingsWorker::class.java).build()
+        val websocketConnectionsWorker = OneTimeWorkRequest.Builder(WebsocketConnectionsWorker::class.java).build()
+
+        WorkManager.getInstance(applicationContext)
+            .beginWith(accountRemovalWork)
+            .then(capabilitiesUpdateWork)
+            .then(signalingSettingsWork)
+            .then(websocketConnectionsWorker)
+            .enqueue()
+
+        val periodicCapabilitiesUpdateWork = PeriodicWorkRequest.Builder(
+            CapabilitiesWorker::class.java,
+            HALF_DAY,
+            TimeUnit.HOURS
+        ).build()
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            "DailyCapabilitiesUpdateWork",
+            ExistingPeriodicWorkPolicy.REPLACE,
+            periodicCapabilitiesUpdateWork
+        )
+    }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        sharedApplication = null
+    }
+    //endregion
+
+    //region Protected methods
+    protected fun buildComponent() {
+        componentApplication = DaggerNextcloudTalkApplicationComponent.builder()
+            .busModule(BusModule())
+            .contextModule(ContextModule(applicationContext))
+            .databaseModule(DatabaseModule())
+            .restModule(RestModule(applicationContext))
+            .arbitraryStorageModule(ArbitraryStorageModule())
+            .build()
+    }
+
+    private fun buildDefaultImageLoader(): ImageLoader {
+        val imageLoaderBuilder = ImageLoader.Builder(applicationContext)
+            .memoryCache {
+                // Use 50% of the application's available memory.
+                MemoryCache.Builder(applicationContext).maxSizePercent(FIFTY_PERCENT).build()
+            }
+            .crossfade(true) // Show a short crossfade when loading images from network or disk into an ImageView.
+            .components {
+                if (SDK_INT >= P) {
+                    add(ImageDecoderDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+                add(SvgDecoder.Factory())
+            }
+
+        if (BuildConfig.DEBUG) {
+            imageLoaderBuilder.logger(DebugLogger())
+        }
+
+        imageLoaderBuilder.okHttpClient(okHttpClient)
+
+        return imageLoaderBuilder.build()
+    }
+
+    companion object {
+        private val TAG = NextcloudTalkApplication::class.java.simpleName
+        const val FIFTY_PERCENT = 0.5
+        const val HALF_DAY: Long = 12
+        const val CIPHER_V4_MIGRATION: Int = 7
+        //region Singleton
+        //endregion
+
+        var sharedApplication: NextcloudTalkApplication? = null
+            protected set
+
+        @Volatile
+        var pendingLockCheck = true
+        //endregion
+
+        //region Setters
+        fun setAppTheme(theme: String) {
+            when (theme) {
+                "night_no" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+                "night_yes" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+                "battery_saver" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY)
+                else ->
+                    // will be "follow_system" only for now
+                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+            }
+        }
+    }
+    //endregion
+}
