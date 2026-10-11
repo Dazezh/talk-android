@@ -120,7 +120,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
 
-                <data android:mimeType="vnd.android.cursor.item/vnd.com.nextcloud.talk2.chat" />
+                <data android:mimeType="vnd.android.cursor.item/vnd.ru.zezh.ralk.chat" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
             </intent-filter>

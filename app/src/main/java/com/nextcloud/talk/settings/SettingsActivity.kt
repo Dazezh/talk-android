@@ -240,7 +240,12 @@ class SettingsActivity :
         loadCapabilitiesAndUpdateSettings(isOnline.value)
 
         binding.settingsVersion.setOnClickListener {
+            showTrademarkNotice()
+        }
+
+        binding.settingsVersion.setOnLongClickListener {
             sendLogs()
+            true
         }
 
         if (!TextUtils.isEmpty(currentUser!!.clientCertificate)) {
@@ -731,6 +736,16 @@ class SettingsActivity :
         } else {
             binding.settingsLicence.visibility = View.GONE
         }
+    }
+
+    private fun showTrademarkNotice() {
+        val dialogBuilder = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.nc_app_product_name)
+            .setMessage(R.string.nc_trademark_notice)
+            .setPositiveButton(R.string.nc_ok, null)
+        viewThemeUtils.dialog.colorMaterialAlertDialogBackground(this, dialogBuilder)
+        val dialog = dialogBuilder.show()
+        viewThemeUtils.platform.colorTextButtons(dialog.getButton(AlertDialog.BUTTON_POSITIVE))
     }
 
     private fun showSetupClientCertView(isOnline: Boolean) {

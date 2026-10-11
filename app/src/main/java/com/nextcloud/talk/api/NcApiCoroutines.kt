@@ -45,6 +45,7 @@ import com.nextcloud.talk.models.json.upcomingEvents.UpcomingEventsOverall
 import com.nextcloud.talk.models.json.userAbsence.UserAbsenceOverall
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -613,4 +614,25 @@ interface NcApiCoroutines {
         @Header("Authorization") authorization: String,
         @Url url: String
     ): PasswordResultOverall
+
+    /*
+        The r-stiker routes answer with their payload directly instead of an OCS envelope, so the raw
+        body is returned here and parsed by the sticker repository.
+     */
+    @GET
+    suspend fun getStickerPacks(@Header("Authorization") authorization: String, @Url url: String): ResponseBody
+
+    @GET
+    suspend fun getStickers(
+        @Header("Authorization") authorization: String,
+        @Url url: String,
+        @Query("cursor") cursor: Int,
+        @Query("limit") limit: Int
+    ): ResponseBody
+
+    @GET
+    suspend fun getStickersRevision(@Header("Authorization") authorization: String, @Url url: String): ResponseBody
+
+    @GET
+    suspend fun getStickerImage(@Header("Authorization") authorization: String?, @Url url: String): ResponseBody
 }

@@ -82,11 +82,41 @@
                 android:visibility="gone"
                 tools:visibility="visible" />
 
-            <androidx.emoji2.emojipicker.EmojiPickerView
-                android:id="@+id/emoji_picker"
+            <LinearLayout
+                android:id="@+id/stickerPickerContainer"
                 android:layout_width="match_parent"
-                android:layout_height="250dp"
-                android:visibility="gone" />
+                android:layout_height="@dimen/emoji_picker_height"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+
+                    <androidx.emoji2.emojipicker.EmojiPickerView
+                        android:id="@+id/emoji_picker"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/sticker_picker_grid"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:visibility="gone" />
+                </FrameLayout>
+
+                <androidx.compose.ui.platform.ComposeView
+                    android:id="@+id/sticker_picker_tabs"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/sticker_tabs_height"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/sticker_cache_dialog"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
 </LinearLayout>

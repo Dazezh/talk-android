@@ -20,9 +20,11 @@ data class Reference(
     var richObject: RichObject? = null,
     @JsonField(name = ["openGraphObject"])
     var openGraphObject: OpenGraphObject? = null,
+
+    // null when the server did not send the field at all, which is not the same as an inaccessible link
     @JsonField(name = ["accessible"])
-    var accessible: Boolean
+    var accessible: Boolean? = null
 ) : Parcelable {
     // This constructor is added to work with the 'com.bluelinelabs.logansquare.annotation.JsonObject'
-    constructor() : this(null, null, null, false)
+    constructor() : this(null, null, null, null)
 }

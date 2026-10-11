@@ -11,6 +11,7 @@ package com.nextcloud.talk.utils
 import android.util.Log
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.models.json.capabilities.SpreedCapability
+import com.nextcloud.talk.models.json.capabilities.StickersCapability
 
 enum class SpreedFeatures(val value: String) {
     RECORDING_V1("recording-v1"),
@@ -121,6 +122,19 @@ object CapabilitiesUtil {
      * server does not advertise the password_policy capability.
      */
     fun getPasswordGenerationUrl(user: User?): String? = user?.capabilities?.passwordPolicy?.api?.generatePasswordApi
+
+    // endregion
+
+    //region StickerCapabilities
+
+    /**
+     * Sticker support as announced by the r-stiker app, or null when the app is not installed on the
+     * server or does not offer stickers.
+     */
+    fun getStickersCapability(user: User?): StickersCapability? =
+        user?.capabilities?.rStikerCapability?.stickersCapability
+
+    fun hasStickerCapability(user: User?): Boolean = getStickersCapability(user) != null
 
     // endregion
 

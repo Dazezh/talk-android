@@ -4,6 +4,20 @@
 -->
 # [Nextcloud](https://nextcloud.com) Talk for Android :speech_balloon:
 
+> [!IMPORTANT]
+> **This is "Ralk", an internal fork of Nextcloud Talk for Android. It is not the upstream project.**
+>
+> The license this code is distributed under (GPL-3.0-or-later) requires modifications to be published
+> and their source to stay available. This repository therefore carries all changes of the fork, so the
+> corresponding source is available for every build that is handed out.
+>
+> The fork does not claim any rights to the trademarks owned by Nextcloud GmbH. "Ralk" is not
+> affiliated with, endorsed by or sponsored by Nextcloud.
+>
+> Pull requests against the upstream Nextcloud Talk project are not planned. The changes are internal,
+> they exist only for this deployment and do not meet the code quality standards the upstream project
+> aims for.
+
 [![Build Status](https://drone.nextcloud.com/api/badges/nextcloud/talk-android/status.svg)](https://drone.nextcloud.com/nextcloud/talk-android) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/b89a720efbd24754984a776804913bca)](https://www.codacy.com/gh/nextcloud/talk-android/dashboard) [![Releases](https://img.shields.io/github/release/nextcloud/talk-android.svg)](https://github.com/nextcloud/talk-android/releases/latest) [![REUSE status](https://api.reuse.software/badge/github.com/nextcloud/talk-android)](https://api.reuse.software/info/github.com/nextcloud/talk-android)
 
 [<img src="https://play.google.com/intl/en_us/badges/images/generic/en_badge_web_generic.png" 

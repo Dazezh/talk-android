@@ -199,6 +199,7 @@ How to translate with transifex:
     <string name="nc_get_source_code">Get source code</string>
     <string name="nc_license_title">License</string>
     <string name="nc_license_summary">GNU General Public License, Version 3</string>
+    <string name="nc_trademark_notice">Nextcloud является зарегистрированной торговой маркой. Построено на базе андроид клиента Nextcloud Talk.</string>
 
     <string name="nc_select_an_account">Select an account</string>
     <string name="nc_account_chooser_add_account">Add account</string>
@@ -499,6 +500,10 @@ How to translate with transifex:
     <string name="appear_offline">Appear offline</string>
     <string name="default_emoji" translatable="false">😃</string>
     <string name="emoji_more">More emojis</string>
+    <string name="nc_sticker">Sticker</string>
+    <string name="nc_stickers_caching">Caching stickers</string>
+    <string name="nc_stickers_cached">Stickers updated</string>
+    <string name="nc_stickers_load_in_background">Load in background</string>
     <string name="dontClear">Don\'t clear</string>
     <string name="today">Today</string>
     <string name="fifteenMinutes">15 minutes</string>

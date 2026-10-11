@@ -39,6 +39,8 @@ import android.widget.RelativeLayout
 import android.widget.SeekBar
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.isVisible
@@ -47,7 +49,10 @@ import androidx.emoji2.emojipicker.RecentEmojiProvider
 import androidx.emoji2.widget.EmojiTextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import autodagger.AutoInjector
@@ -71,6 +76,13 @@ import com.nextcloud.talk.models.json.chat.ChatUtils
 import com.nextcloud.talk.models.json.mention.Mention
 import com.nextcloud.talk.models.json.signaling.NCSignalingMessage
 import com.nextcloud.talk.presenters.MentionAutocompletePresenter
+import com.nextcloud.talk.stickers.data.StickerImageLoader
+import com.nextcloud.talk.stickers.ui.LocalStickerImageLoader
+import com.nextcloud.talk.stickers.ui.StickerCacheDialog
+import com.nextcloud.talk.stickers.ui.StickerPickerGrid
+import com.nextcloud.talk.stickers.ui.StickerPickerTabs
+import com.nextcloud.talk.stickers.viewmodels.StickersViewModel
+import com.nextcloud.talk.stickers.viewmodels.StickersViewModel.Companion.TAB_EMOJI
 import com.nextcloud.talk.ui.CallStartedBanner
 import com.nextcloud.talk.ui.MicInputCloud
 import com.nextcloud.talk.ui.dialog.AttachmentDialog
@@ -113,7 +125,14 @@ class MessageInputFragment : Fragment() {
     @Inject
     lateinit var dateUtils: DateUtils
 
+    @Inject
+    lateinit var viewModelFactory: ViewModelProvider.Factory
+
+    @Inject
+    lateinit var stickerImageLoader: StickerImageLoader
+
     private val messageInputViewModel: MessageInputViewModel by activityViewModels()
+    private val stickersViewModel: StickersViewModel by viewModels { viewModelFactory }
     lateinit var binding: FragmentMessageInputBinding
     private lateinit var conversationInternalId: String
     private var typedWhileTypingTimerIsRunning: Boolean = false
@@ -130,6 +149,7 @@ class MessageInputFragment : Fragment() {
     private var lastQuotedJsonId: Int? = null
     private var lastEditMessageId: Int? = null
     private var lastIsThreadCreationInProgress: Boolean = false
+    private var stickersInitialized = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -155,6 +175,8 @@ class MessageInputFragment : Fragment() {
 
     override fun onDestroyView() {
         restoreKeyboardOnEmojiDismiss = false
+        // the sticker views belong to the destroyed view hierarchy and have to be set up again for a new one
+        stickersInitialized = false
         super.onDestroyView()
         if (mentionAutocomplete != null && mentionAutocomplete!!.isPopupShowing) {
             mentionAutocomplete?.dismissPopup()
@@ -251,6 +273,7 @@ class MessageInputFragment : Fragment() {
                 is ChatViewModel.GetCapabilitiesUpdateState -> {
                     initMessageInputView(state.spreedCapabilities)
                     initSmileyKeyboardToggler()
+                    initStickerPicker()
                     setupMentionAutocomplete()
                     initVoiceRecordButton()
                     initThreadHandling()
@@ -261,6 +284,7 @@ class MessageInputFragment : Fragment() {
                 is ChatViewModel.GetCapabilitiesInitialLoadState -> {
                     initMessageInputView(state.spreedCapabilities)
                     initSmileyKeyboardToggler()
+                    initStickerPicker()
                     setupMentionAutocomplete()
                     initVoiceRecordButton()
                     initThreadHandling()
@@ -792,7 +816,7 @@ class MessageInputFragment : Fragment() {
     private fun showRecordAudioUi(show: Boolean) {
         if (show) {
             restoreKeyboardOnEmojiDismiss = false
-            binding.emojiPicker.isVisible = false
+            binding.stickerPickerContainer.isVisible = false
             val animation: Animation = AlphaAnimation(FULLY_OPAQUE, FULLY_TRANSPARENT)
             animation.duration = ANIMATION_DURATION
             animation.interpolator = LinearInterpolator()
@@ -825,7 +849,7 @@ class MessageInputFragment : Fragment() {
     }
 
     private fun updateSmileyButtonIcon() {
-        val icon = if (binding.emojiPicker.isVisible) {
+        val icon = if (binding.stickerPickerContainer.isVisible) {
             R.drawable.ic_baseline_keyboard_24
         } else {
             R.drawable.ic_insert_emoticon_black_24dp
@@ -853,6 +877,7 @@ class MessageInputFragment : Fragment() {
     private fun initSmileyKeyboardToggler() {
         val inputEditText = binding.fragmentMessageInputView.inputEditText
         val emojiPicker = binding.emojiPicker
+        val pickerContainer = binding.stickerPickerContainer
 
         emojiPicker.setRecentEmojiProvider(MessageInputRecentEmojiProvider(requireContext()))
         emojiPicker.setOnEmojiPickedListener { item ->
@@ -865,22 +890,116 @@ class MessageInputFragment : Fragment() {
         updateSmileyButtonIcon()
 
         binding.fragmentMessageInputView.smileyButton.setOnClickListener {
-            if (emojiPicker.isVisible) {
+            if (pickerContainer.isVisible) {
                 showKeyboard()
-                emojiPicker.isVisible = false
+                pickerContainer.isVisible = false
             } else {
                 hideKeyboard()
-                emojiPicker.isVisible = true
+                pickerContainer.isVisible = true
+                stickersViewModel.onPickerOpened()
             }
             updateSmileyButtonIcon()
         }
 
+        binding.fragmentMessageInputView.smileyButton.setOnLongClickListener {
+            if (CapabilitiesUtil.hasStickerCapability(chatActivity.conversationUser)) {
+                stickersViewModel.forceRefresh()
+                true
+            } else {
+                // without sticker support the long press is left to the regular toggle
+                false
+            }
+        }
+
         inputEditText.setOnClickListener {
-            if (emojiPicker.isVisible) {
-                emojiPicker.isVisible = false
+            if (pickerContainer.isVisible) {
+                pickerContainer.isVisible = false
                 updateSmileyButtonIcon()
             }
         }
+    }
+
+    /**
+     * Adds the sticker tabs to the emoji picker. Without the r-stiker sticker capability of the current
+     * server nothing is added and the picker stays exactly as it was.
+     */
+    private fun initStickerPicker() {
+        val user = chatActivity.conversationUser
+        if (!CapabilitiesUtil.hasStickerCapability(user)) {
+            if (stickersInitialized) {
+                // the server lost the sticker capability while the picker was open
+                binding.stickerPickerTabs.isVisible = false
+                stickersViewModel.selectTab(TAB_EMOJI)
+            }
+            return
+        }
+
+        if (stickersInitialized) {
+            stickersViewModel.initialize(user)
+            return
+        }
+        stickersInitialized = true
+
+        // the tab strip belongs to the picker itself and is shown as soon as the server offers stickers,
+        // independently of how many packs have been loaded into it already
+        binding.stickerPickerTabs.isVisible = true
+
+        binding.stickerPickerTabs.setContent {
+            val state by stickersViewModel.state.collectAsStateWithLifecycle()
+            MaterialTheme(colorScheme = viewThemeUtils.getColorScheme(requireContext())) {
+                StickerPickerTabs(
+                    packs = state.packs,
+                    selectedTab = state.selectedTab,
+                    onTabSelected = { stickersViewModel.selectTab(it) }
+                )
+            }
+        }
+
+        binding.stickerPickerGrid.setContent {
+            val state by stickersViewModel.state.collectAsStateWithLifecycle()
+            CompositionLocalProvider(
+                LocalStickerImageLoader provides { url, credentials -> stickerImageLoader.load(url, credentials) }
+            ) {
+                MaterialTheme(colorScheme = viewThemeUtils.getColorScheme(requireContext())) {
+                    StickerPickerGrid(
+                        state = state,
+                        onLoadMore = { stickersViewModel.loadMore() },
+                        onStickerClick = { sticker ->
+                            sendMessage(sticker.resourceUrl, false)
+                            chatActivity.requestScrollToNewestMessage()
+                        }
+                    )
+                }
+            }
+        }
+
+        binding.stickerCacheDialog.setContent {
+            val state by stickersViewModel.state.collectAsStateWithLifecycle()
+            if (state.isCachingInProgress) {
+                MaterialTheme(colorScheme = viewThemeUtils.getColorScheme(requireContext())) {
+                    StickerCacheDialog(onContinueInBackground = { stickersViewModel.cacheInBackground() })
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                stickersViewModel.state.collect { state ->
+                    binding.emojiPicker.isVisible = state.selectedTab == TAB_EMOJI
+                    binding.stickerPickerGrid.isVisible = state.selectedTab != TAB_EMOJI
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                stickersViewModel.libraryCached.collect {
+                    chatActivity.showStickerPacksCachedSnackbar()
+                }
+            }
+        }
+
+        stickersViewModel.initialize(user)
     }
 
     private class MessageInputRecentEmojiProvider(context: Context) : RecentEmojiProvider {

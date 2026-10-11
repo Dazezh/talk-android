@@ -15,6 +15,7 @@ import com.nextcloud.talk.application.NextcloudTalkApplication.Companion.sharedA
 import com.nextcloud.talk.data.database.model.SendStatus
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.models.json.chat.ChatUtils.Companion.getParsedMessage
+import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
 import java.time.Instant
 import java.time.LocalDate
@@ -179,6 +180,15 @@ data class ChatMessage(
         val regexStringFromServer = user.capabilities?.coreCapability?.referenceRegex
         return extractUrlCandidateForLinkPreview(messageText, regexStringFromServer)
     }
+
+    /**
+     * True when this message carries nothing but the given link to a sticker of the r-stiker app and the
+     * server of the user offers stickers.
+     */
+    fun isStickerLink(user: User, url: String): Boolean =
+        CapabilitiesUtil.hasStickerCapability(user) &&
+            ApiUtils.isStickerImageUrl(url) &&
+            message.orEmpty().replace(url, "").isBlank()
 
     internal fun extractUrlCandidateForLinkPreview(messageText: String, serverReferenceRegex: String?): String? {
         val markdownUrl = MARKDOWN_LINK_REGEX.find(messageText)

@@ -6,7 +6,7 @@
   ~ SPDX-License-Identifier: GPL-3.0-or-later
 -->
 <resources>
-    <string name="nc_app_name">Talk QA</string>
-    <string name="nc_app_product_name">Nextcloud Talk QA</string>
+    <string name="nc_app_name">Ralk QA</string>
+    <string name="nc_app_product_name">Zezh Ralk QA</string>
     <string name="nc_server_product_name">Nextcloud</string>
 </resources>

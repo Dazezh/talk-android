@@ -84,11 +84,11 @@ Build output: `app/build/outputs/apk/`
 
 ## Build Flavors
 
-| Flavor    | App ID                   | Purpose                              |
-|-----------|--------------------------|--------------------------------------|
-| `generic` | `com.nextcloud.talk2`    | F-Droid release (no Google services) |
-| `gplay`   | `com.nextcloud.talk2`    | Google Play (Firebase push notifs)   |
-| `qa`      | `com.nextcloud.talk2.qa` | Per-PR testing builds                |
+| Flavor    | App ID                | Purpose                              |
+|-----------|-----------------------|--------------------------------------|
+| `generic` | `ru.zezh.ralk`        | F-Droid release (no Google services) |
+| `gplay`   | `ru.zezh.ralk`        | Google Play (Firebase push notifs)   |
+| `qa`      | `ru.zezh.ralk.qa`     | Per-PR testing builds                |
 
 `gplay`-only dependencies (Firebase, play-services-base) use `gplayImplementation`. Avoid introducing Play-only dependencies into `generic` code paths. F-Droid (`generic`) builds do not support Google push notifications.
 

@@ -47,6 +47,7 @@ data class ChatMessageUi(
     val roomToken: String? = null,
     val activeUserId: String? = null,
     val activeUserBaseUrl: String? = null,
+    val activeUserCredentials: String? = null,
     val messageParameters: Map<String, Map<String, String>> = emptyMap(),
     val reactions: List<MessageReactionUi> = emptyList(),
     val isEdited: Boolean = false,
@@ -69,6 +70,8 @@ sealed interface MessageTypeContent {
     object SystemMessage : MessageTypeContent
 
     data class LinkPreview(val url: String) : MessageTypeContent
+
+    data class Sticker(val url: String) : MessageTypeContent
 
     data class Media(
         val previewUrl: String?,
@@ -151,6 +154,7 @@ fun ChatMessage.toUiModel(
         roomToken = token,
         activeUserId = user.userId,
         activeUserBaseUrl = user.baseUrl,
+        activeUserCredentials = ApiUtils.getCredentials(user.username, user.token),
         messageParameters = normalizeMessageParameters(),
         reactions = getReactionUiModels(),
         isEdited = lastEditTimestamp != 0L,
@@ -199,6 +203,7 @@ fun ChatMessage.toScheduledMessageUiModel(
         roomToken = roomToken,
         activeUserId = user.userId,
         activeUserBaseUrl = user.baseUrl,
+        activeUserCredentials = ApiUtils.getCredentials(user.username, user.token),
         messageParameters = normalizeMessageParameters(),
         reactions = emptyList(),
         isEdited = lastEditTimestamp != 0L,
@@ -278,9 +283,14 @@ fun getMessageTypeContent(user: User, message: ChatMessage, isClassified: Boolea
     } else if (message.hasDeckCard) {
         getDeckContent(message)
     } else {
-        message.extractLinkPreviewUrl(user)
-            ?.let { MessageTypeContent.LinkPreview(url = it) }
-            ?: MessageTypeContent.RegularText
+        val linkPreviewUrl = message.extractLinkPreviewUrl(user)
+        if (linkPreviewUrl == null) {
+            MessageTypeContent.RegularText
+        } else if (message.isStickerLink(user, linkPreviewUrl)) {
+            MessageTypeContent.Sticker(url = linkPreviewUrl)
+        } else {
+            MessageTypeContent.LinkPreview(url = linkPreviewUrl)
+        }
     }
 
 private const val FILE_PLACEHOLDER_MESSAGE = "{file}"

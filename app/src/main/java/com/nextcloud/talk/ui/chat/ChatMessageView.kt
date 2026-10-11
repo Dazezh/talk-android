@@ -167,6 +167,15 @@ fun ChatMessageView(
                             )
                         }
 
+                        is MessageTypeContent.Sticker -> {
+                            StickerMessage(
+                                typeContent = content,
+                                message = message,
+                                isOneToOneConversation = context.isOneToOneConversation,
+                                conversationThreadId = context.conversationThreadId
+                            )
+                        }
+
                         is MessageTypeContent.Geolocation -> {
                             GeolocationMessage(
                                 typeContent = content,

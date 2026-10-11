@@ -7,8 +7,8 @@
   ~ SPDX-License-Identifier: GPL-3.0-or-later
 -->
 <resources>
-    <color name="colorPrimary">#0082C9</color>
-    <color name="colorPrimaryDark">#006AA3</color>
+    <color name="colorPrimary">#d07861</color>
+    <color name="colorPrimaryDark">#af604c</color>
     <color name="colorAccent">@color/colorPrimary</color>
     <color name="disabled_text">#ff888888</color>
     <color name="textColorOnPrimaryBackground">#ffffff</color> <!-- white/black depending on primary color -->

@@ -104,6 +104,8 @@ import com.nextcloud.talk.ui.chat.DateHeader
 import com.nextcloud.talk.ui.chat.DateHeaderLabel
 import com.nextcloud.talk.ui.chat.LocalShowThreadButton
 import com.nextcloud.talk.ui.chat.formatTime
+import com.nextcloud.talk.stickers.data.StickerImageLoader
+import com.nextcloud.talk.stickers.ui.LocalStickerImageLoader
 import com.nextcloud.talk.ui.theme.LocalMessageUtils
 import com.nextcloud.talk.ui.theme.LocalViewThemeUtils
 import com.nextcloud.talk.utils.ApiUtils
@@ -136,6 +138,9 @@ class ScheduledMessagesActivity : BaseActivity() {
 
     @Inject
     lateinit var networkMonitor: NetworkMonitor
+
+    @Inject
+    lateinit var stickerImageLoader: StickerImageLoader
 
     private val roomToken: String by lazy {
         intent.getStringExtra(ROOM_TOKEN).orEmpty()
@@ -176,6 +181,7 @@ class ScheduledMessagesActivity : BaseActivity() {
                 CompositionLocalProvider(
                     LocalViewThemeUtils provides viewThemeUtils,
                     LocalMessageUtils provides messageUtils,
+                    LocalStickerImageLoader provides { url, credentials -> stickerImageLoader.load(url, credentials) },
                     LocalShowThreadButton provides false
                 ) {
                     ColoredStatusBar()

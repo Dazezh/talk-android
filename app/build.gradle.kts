@@ -61,8 +61,8 @@ android {
 
         // mayor.minor.hotfix.increment (for increment: 01-50=Alpha / 51-89=RC / 90-99=stable)
         // xx   .xxx  .xx    .xx
-        versionCode = 250000190
-        versionName = "25.0.1"
+        versionCode = 250000200
+        versionName = "25.0.2"
 
         vectorDrawables.useSupportLibrary = true
 
@@ -82,15 +82,15 @@ android {
     productFlavors {
         // used for f-droid
         create("generic") {
-            applicationId = "com.nextcloud.talk2"
+            applicationId = "ru.zezh.ralk"
             dimension = "default"
         }
         create("gplay") {
-            applicationId = "com.nextcloud.talk2"
+            applicationId = "ru.zezh.ralk"
             dimension = "default"
         }
         create("qa") {
-            applicationId = "com.nextcloud.talk2.qa"
+            applicationId = "ru.zezh.ralk.qa"
             dimension = "default"
             versionCode = 1
             versionName = "1"

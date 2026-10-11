@@ -67,6 +67,9 @@ import com.nextcloud.talk.repositories.unifiedsearch.UnifiedSearchRepository
 import com.nextcloud.talk.repositories.unifiedsearch.UnifiedSearchRepositoryImpl
 import com.nextcloud.talk.shareditems.repositories.SharedItemsRepository
 import com.nextcloud.talk.shareditems.repositories.SharedItemsRepositoryImpl
+import com.nextcloud.talk.stickers.data.StickerCache
+import com.nextcloud.talk.stickers.data.StickerRepository
+import com.nextcloud.talk.stickers.data.StickerRepositoryImpl
 import com.nextcloud.talk.threadsoverview.data.ThreadsRepository
 import com.nextcloud.talk.threadsoverview.data.ThreadsRepositoryImpl
 import com.nextcloud.talk.translate.repositories.TranslateRepository
@@ -112,6 +115,13 @@ class RepositoryModule {
     @Provides
     fun provideReactionsRepository(ncApiCoroutines: NcApiCoroutines, dao: ChatMessagesDao): ReactionsRepository =
         ReactionsRepositoryImpl(ncApiCoroutines, dao)
+
+    @Provides
+    fun provideStickerRepository(
+        ncApiCoroutines: NcApiCoroutines,
+        cache: StickerCache,
+        logger: Logger
+    ): StickerRepository = StickerRepositoryImpl(ncApiCoroutines, cache, logger)
 
     @Provides
     fun provideCallRecordingRepository(ncApi: NcApi): CallRecordingRepository = CallRecordingRepositoryImpl(ncApi)

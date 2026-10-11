@@ -562,6 +562,10 @@
     <string name="nc_sort_by">Сортировать по</string>
     <string name="nc_start_group_chat">Начать групповой чат</string>
     <string name="nc_start_time">Время начала</string>
+    <string name="nc_sticker">Стикер</string>
+    <string name="nc_stickers_caching">Кэширование стикеров</string>
+    <string name="nc_stickers_cached">Стикеры обновлены</string>
+    <string name="nc_stickers_load_in_background">Загрузить в фоне</string>
     <string name="nc_switch_account">Сменить аккаунт</string>
     <string name="nc_team">Команда</string>
     <string name="nc_test_push_button">Проверить пуш-уведомления</string>

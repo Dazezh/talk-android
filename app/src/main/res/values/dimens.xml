@@ -61,6 +61,10 @@
     <dimen name="reaction_bottom_sheet_layout_size">40dp</dimen>
     <dimen name="standard_eighth_margin">2dp</dimen>
 
+    <dimen name="emoji_picker_height">250dp</dimen>
+    <dimen name="sticker_message_size">120dp</dimen>
+    <dimen name="sticker_tabs_height">48dp</dimen>
+
     <dimen name="default_checkbox_dialog_start_margin">18dp</dimen>
 
     <dimen name="mediatab_file_icon_size">50dp</dimen>

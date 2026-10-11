@@ -33,7 +33,7 @@ import com.nextcloud.talk.chat.ui.model.ChatMessageUi
 import com.nextcloud.talk.chat.ui.model.MessageTypeContent
 import com.nextcloud.talk.contacts.load
 import com.nextcloud.talk.models.json.opengraph.OpenGraphObject
-import com.nextcloud.talk.ui.theme.LocalOpenGraphFetcher
+import com.nextcloud.talk.ui.theme.LocalReferenceResolver
 import androidx.core.net.toUri
 
 private val previewImageHeight = 120.dp
@@ -46,11 +46,11 @@ fun LinkMessage(
     isOneToOneConversation: Boolean = false,
     conversationThreadId: Long? = null
 ) {
-    val fetchOpenGraph = LocalOpenGraphFetcher.current
+    val resolveReference = LocalReferenceResolver.current
     val highlightSearchTerm = LocalHighlightSearchTerm.current
     val openGraphObject by produceState<OpenGraphObject?>(initialValue = null, key1 = typeContent.url) {
         if (typeContent.url.isNotEmpty()) {
-            value = fetchOpenGraph(typeContent.url)
+            value = resolveReference(typeContent.url)?.openGraphObject
         }
     }
 

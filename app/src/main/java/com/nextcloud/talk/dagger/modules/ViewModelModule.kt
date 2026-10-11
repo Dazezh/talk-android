@@ -36,6 +36,7 @@ import com.nextcloud.talk.polls.viewmodels.PollVoteViewModel
 import com.nextcloud.talk.raisehand.viewmodel.RaiseHandViewModel
 import com.nextcloud.talk.remotefilebrowser.viewmodels.RemoteFileBrowserItemsViewModel
 import com.nextcloud.talk.shareditems.viewmodels.SharedItemsViewModel
+import com.nextcloud.talk.stickers.viewmodels.StickersViewModel
 import com.nextcloud.talk.threadsoverview.viewmodels.ThreadsOverviewViewModel
 import com.nextcloud.talk.translate.viewmodels.TranslateViewModel
 import com.nextcloud.talk.viewmodels.CallRecordingViewModel
@@ -148,6 +149,11 @@ abstract class ViewModelModule {
     @IntoMap
     @ViewModelKey(ConversationTagsViewModel::class)
     abstract fun conversationTagsViewModel(viewModel: ConversationTagsViewModel): ViewModel
+
+    @Binds
+    @IntoMap
+    @ViewModelKey(StickersViewModel::class)
+    abstract fun stickersViewModel(viewModel: StickersViewModel): ViewModel
 
     // @Binds
     // @IntoMap

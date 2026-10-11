@@ -162,7 +162,7 @@ class MainActivity :
             }
 
             when (intent.type) {
-                "vnd.android.cursor.item/vnd.com.nextcloud.talk2.chat" -> {
+                "vnd.android.cursor.item/vnd.ru.zezh.ralk.chat" -> {
                     val user = userId.substringBeforeLast("@")
                     val baseUrl = userId.substringAfterLast("@")
                     val isValidBaseUrl = baseUrl.isNotBlank() && "https://$baseUrl".toHttpUrlOrNull() != null

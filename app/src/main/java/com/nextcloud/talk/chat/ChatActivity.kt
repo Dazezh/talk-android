@@ -176,8 +176,10 @@ import com.nextcloud.talk.ui.chat.LocalUploadedLocalPreviewProvider
 import com.nextcloud.talk.ui.dialog.DateTimeCompose
 import com.nextcloud.talk.ui.dialog.GetPinnedOptionsDialog
 import com.nextcloud.talk.ui.dialog.SaveToStorageDialogFragment
+import com.nextcloud.talk.stickers.data.StickerImageLoader
+import com.nextcloud.talk.stickers.ui.LocalStickerImageLoader
 import com.nextcloud.talk.ui.theme.LocalMessageUtils
-import com.nextcloud.talk.ui.theme.LocalOpenGraphFetcher
+import com.nextcloud.talk.ui.theme.LocalReferenceResolver
 import com.nextcloud.talk.ui.theme.LocalViewThemeUtils
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.AudioUtils
@@ -289,6 +291,9 @@ class ChatActivity :
 
     @Inject
     lateinit var networkMonitor: NetworkMonitor
+
+    @Inject
+    lateinit var stickerImageLoader: StickerImageLoader
 
     @Inject
     lateinit var chatViewModelFactory: ChatViewModel.ChatViewModelFactory
@@ -732,6 +737,10 @@ class ChatActivity :
 
     private var chatListState: LazyListState? = null
 
+    fun showStickerPacksCachedSnackbar() {
+        Snackbar.make(binding.root, R.string.nc_stickers_cached, Snackbar.LENGTH_SHORT).show()
+    }
+
     fun requestScrollToNewestMessage() {
         val listState = chatListState
         val composeScope = chatListComposeScope
@@ -889,7 +898,8 @@ class ChatActivity :
                 CompositionLocalProvider(
                     LocalViewThemeUtils provides viewThemeUtils,
                     LocalMessageUtils provides messageUtils,
-                    LocalOpenGraphFetcher provides { url -> chatViewModel.fetchOpenGraph(url) },
+                    LocalReferenceResolver provides { url -> chatViewModel.fetchReference(url) },
+                    LocalStickerImageLoader provides { url, credentials -> stickerImageLoader.load(url, credentials) },
                     LocalUploadProgressProvider provides { refId -> uploadProgressMap[refId] },
                     LocalUploadedLocalPreviewProvider provides { refId -> uploadedLocalPreviewMap[refId] }
                 ) {

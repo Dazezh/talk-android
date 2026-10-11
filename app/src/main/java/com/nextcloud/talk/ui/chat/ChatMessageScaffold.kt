@@ -849,6 +849,11 @@ fun CommonMessageQuote(message: ChatMessageUi, contentMinWidth: Dp = 0.dp) {
                 iconRes = R.drawable.baseline_location_pin_24,
                 label = c.name
             )
+            is MessageTypeContent.Sticker -> QuoteIconRow(
+                actorDisplayName = message.actorDisplayName,
+                iconRes = R.drawable.ic_insert_emoticon_black_24dp,
+                label = stringResource(R.string.nc_sticker)
+            )
             else -> QuoteTextContent(message, onClick = { onQuotedMessageClick(message.id) })
         }
     }

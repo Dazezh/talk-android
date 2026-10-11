@@ -61,7 +61,7 @@ import com.nextcloud.talk.models.json.chat.ChatOverallSingleMessage
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
 import com.nextcloud.talk.models.json.conversations.RoomOverall
 import com.nextcloud.talk.models.json.generic.GenericOverall
-import com.nextcloud.talk.models.json.opengraph.OpenGraphObject
+import com.nextcloud.talk.models.json.opengraph.Reference
 import com.nextcloud.talk.models.json.reminder.Reminder
 import com.nextcloud.talk.models.json.threads.ThreadInfo
 import com.nextcloud.talk.models.json.upcomingEvents.UpcomingEvent
@@ -137,6 +137,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import androidx.core.net.toUri
 
@@ -347,6 +348,8 @@ class ChatViewModel @AssistedInject constructor(
     private val mediaPlayerManager: MediaPlayerManager = MediaPlayerManager.sharedInstance(appPreferences)
     lateinit var currentLifeCycleFlag: LifeCycleFlag
     val disposableSet = mutableSetOf<Disposable>()
+
+    private val referenceCache = ConcurrentHashMap<String, Reference>()
 
     var messageDraft: MessageDraft = MessageDraft()
     var hiddenUpcomingEvent: String? = null
@@ -2585,16 +2588,21 @@ class ChatViewModel @AssistedInject constructor(
         }
     }
 
-    suspend fun fetchOpenGraph(url: String): OpenGraphObject? {
+    /**
+     * Resolves a link through the reference API of the server. Successful answers are kept for the lifetime
+     * of this conversation so scrolling does not resolve the same link over and over again.
+     */
+    suspend fun fetchReference(url: String): Reference? {
         if (!this::currentUser.isInitialized) return null
-        return withContext(Dispatchers.IO) {
+
+        return referenceCache[url] ?: withContext(Dispatchers.IO) {
             runCatching {
                 chatNetworkDataSource.getOpenGraph(
                     currentUser.getCredentials(),
                     currentUser.baseUrl!!,
                     url
-                )?.openGraphObject
-            }.getOrNull()
+                )
+            }.getOrNull()?.also { referenceCache[url] = it }
         }
     }
 

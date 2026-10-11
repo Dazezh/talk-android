@@ -34,6 +34,8 @@ object ApiUtils {
     private const val OCS_API_VERSION = "/ocs/v2.php"
     private const val SPREED_API_VERSION = "/apps/spreed/api/v1"
     private const val SPREED_API_BASE = "$OCS_API_VERSION/apps/spreed/api/v"
+    private const val R_STIKER_API_BASE = "$OCS_API_VERSION/apps/r-stiker/api/v1"
+    private const val R_STIKER_STICKER_PATH = "/apps/r-stiker/s/"
 
     @JvmStatic
     val userAgent = "Mozilla/5.0 (Android) Nextcloud-Talk v"
@@ -101,6 +103,26 @@ object ApiUtils {
 
     @JvmStatic
     fun getUrlForCapabilities(baseUrl: String): String = "$baseUrl$OCS_API_VERSION/cloud/capabilities"
+
+    @JvmStatic
+    fun getUrlForStickerPacks(baseUrl: String): String = "$baseUrl$R_STIKER_API_BASE/packs"
+
+    @JvmStatic
+    fun getUrlForStickers(baseUrl: String, packName: String): String =
+        "$baseUrl$R_STIKER_API_BASE/stickers/" + encodePathSegment(packName)
+
+    @JvmStatic
+    fun getUrlForStickersRevision(baseUrl: String): String = "$baseUrl$R_STIKER_API_BASE/revision"
+
+    /** True when [url] addresses the sticker image route of the r-stiker app. */
+    @JvmStatic
+    fun isStickerImageUrl(url: String): Boolean = url.contains(R_STIKER_STICKER_PATH)
+
+    /**
+     * Sticker pack names are free-form (they may contain spaces and non-ASCII characters), so they have
+     * to be encoded before being used as a path segment.
+     */
+    private fun encodePathSegment(segment: String): String = Uri.encode(segment, "UTF-8")
 
     @Throws(NoSupportedApiException::class)
     fun getCallApiVersion(capabilities: User, versions: IntArray): Int =
