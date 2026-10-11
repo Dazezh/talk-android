@@ -70,9 +70,12 @@ class TalkSpecificViewThemeUtils @Inject constructor(
 ) : ViewThemeUtilsBase(schemes) {
     private val dynamicColor = MaterialDynamicColors()
 
-    fun themeCardView(cardView: MaterialCardView) {
+    /** Translucent so the chat background stays visible through the message input field. */
+    fun themeTranslucentCardView(cardView: MaterialCardView) {
         withScheme(cardView) { scheme ->
-            cardView.backgroundTintList = ColorStateList.valueOf(dynamicColor.surfaceVariant().getArgb(scheme))
+            cardView.backgroundTintList = ColorStateList.valueOf(
+                ColorUtils.setAlphaComponent(dynamicColor.surfaceVariant().getArgb(scheme), ALPHA_60_INT)
+            )
         }
     }
 
@@ -514,6 +517,8 @@ class TalkSpecificViewThemeUtils @Inject constructor(
         /** Whether the mimetype placeholder [drawableResourceId] is monochrome and picks up the theme color. */
         fun isThemeablePlaceholder(@DrawableRes drawableResourceId: Int): Boolean =
             THEMEABLE_PLACEHOLDER_IDS.contains(drawableResourceId)
+
+        private val ALPHA_60_INT: Int = (255 * 0.6).roundToInt()
 
         private val ALPHA_80_INT: Int = (255 * 0.8).roundToInt()
 

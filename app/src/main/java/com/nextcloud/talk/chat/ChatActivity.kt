@@ -100,6 +100,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.common.util.concurrent.ListenableFuture
 import com.nextcloud.android.common.ui.color.ColorUtil
+import com.nextcloud.android.common.ui.theme.utils.ColorRole
 import com.nextcloud.talk.BuildConfig
 import com.nextcloud.talk.R
 import com.nextcloud.talk.activities.BaseActivity
@@ -580,6 +581,7 @@ class ChatActivity :
 
         binding = ActivityChatBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        viewThemeUtils.platform.themeViewBackground(binding.root, ColorRole.SURFACE)
 
         setupChatToolbarView()
         setupChatEmptyStateView()
