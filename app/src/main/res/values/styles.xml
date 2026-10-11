@@ -68,12 +68,12 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
 
         <!-- Force a light (white) toolbar surface even in dark mode -->
-        <item name="colorSurface">#FFFFFF</item>
-        <item name="colorOnSurface">#000000</item>
+        <item name="colorSurface">@color/white</item>
+        <item name="colorOnSurface">@color/black</item>
 
         <!-- Primary used as toolbar tint fallback -->
-        <item name="colorPrimary">#FFFFFF</item>
-        <item name="colorOnPrimary">#000000</item>
+        <item name="colorPrimary">@color/white</item>
+        <item name="colorOnPrimary">@color/black</item>
     </style>
 
 
@@ -116,7 +116,7 @@
     </style>
 
     <style name="ChipIncomingTextAppearance" parent="TextAppearance.MaterialComponents.Chip">
-        <item name="android:textColor">#de262626</item>
+        <item name="android:textColor">@color/high_emphasis_text</item>
         <item name="android:textSize">@dimen/chat_text_size</item>
     </style>
 
@@ -290,9 +290,9 @@
 
     <style name="Nextcloud.Material.Outgoing.SeekBar" parent="Widget.AppCompat.SeekBar">
         <item name="android:progressBackgroundTint">#deffffff</item>
-        <item name="android:progressTint">#ffffff</item>
-        <item name="android:colorControlActivated">#ffffff</item>
-        <item name="android:colorControlNormal">#ffffff</item>
+        <item name="android:progressTint">@color/white</item>
+        <item name="android:colorControlActivated">@color/white</item>
+        <item name="android:colorControlNormal">@color/white</item>
     </style>
 
     <style name="CustomShapeAppearanceBottomSheetDialog" parent="">

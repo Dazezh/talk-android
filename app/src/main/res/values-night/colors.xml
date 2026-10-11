@@ -9,13 +9,16 @@
 -->
 <resources>
     <color name="colorPrimary">#d07861</color>
-    <color name="colorPrimaryDark">#af604c</color>
+    <color name="colorPrimaryDark">#e29a86</color>
     <color name="colorAccent">@color/colorPrimary</color>
     <color name="disabled_text">#ff8a837d</color>
+    <color name="textColorOnPrimaryBackground">#261b18</color>
+    <color name="nc_login_text_color">#B3261B18</color>
 
     <!-- App bar -->
     <color name="appbar">#ff2e2e2e</color>
     <color name="fontAppbar">#f2efec</color>
+    <color name="fontSecondaryAppbar">#b7afa9</color>
 
     <!-- general text colors -->
     <color name="no_emphasis_text">#f2efec</color>
@@ -31,7 +34,7 @@
     <color name="fg_default">#b7afa9</color>
     <color name="fg_inverse">#262626</color>
 
-    <color name="conversation_unread_bubble">#3a3633</color>
+    <color name="conversation_unread_bubble">#47413e</color>
     <color name="conversation_unread_bubble_text">#f2efec</color>
 
     <!-- Background for replied messages -->
@@ -45,6 +48,9 @@
     <color name="bg_message_list_outgoing_bubble_audio_played">#4a3a35</color>
 
     <color name="textColorMaxContrast">#b7afa9</color>
+    <color name="nc_darkRed">#e7838d</color>
+    <color name="grey_600">#b7afa9</color>
+    <color name="nc_voice_message_outgoing_controls">#d7d2ce</color>
 
     <!-- Web draws every client-side avatar on the background-darker colour in dark mode -->
     <color name="character_avatar_background_guest">#3a3633</color>
@@ -53,7 +59,7 @@
     <color name="bg_message_own_reaction">#29f2efec</color>
 
     <!-- shimmer element colors -->
-    <color name="nc_shimmer_default_color">#3a3633</color>
+    <color name="nc_shimmer_default_color">#47413e</color>
 
     <color name="dialog_background">#ff2e2e2e</color>
 

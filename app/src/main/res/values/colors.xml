@@ -7,11 +7,14 @@
   ~ SPDX-License-Identifier: GPL-3.0-or-later
 -->
 <resources>
+    <!-- Mode-independent seed for the Material 3 palette; the rest of the scheme is derived from it -->
+    <color name="brand_seed">#af604c</color>
+
     <color name="colorPrimary">#af604c</color>
-    <color name="colorPrimaryDark">#8f4e3d</color>
+    <color name="colorPrimaryDark">#8f4939</color>
     <color name="colorAccent">@color/colorPrimary</color>
     <color name="disabled_text">#ffa8a29c</color>
-    <color name="textColorOnPrimaryBackground">#fff2efec</color> <!-- white/black depending on primary color -->
+    <color name="textColorOnPrimaryBackground">#ffffff</color> <!-- white/black depending on primary color -->
     <color name="nc_login_text_color">#B3FFFFFF</color>
 
     <!-- App bar -->
@@ -44,7 +47,7 @@
     <color name="conversation_unread_bubble">#d7d2ce</color>
     <color name="conversation_unread_bubble_text">#262626</color>
 
-    <color name="nc_darkRed">#D32F2F</color>
+    <color name="nc_darkRed">#a94350</color>
     <color name="nc_darkYellow">#FF9800</color>
     <color name="nc_darkGreen">#006400</color>
     <color name="grey_600">#68635f</color>

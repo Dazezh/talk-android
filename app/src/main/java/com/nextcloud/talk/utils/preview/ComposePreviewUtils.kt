@@ -56,8 +56,6 @@ import com.nextcloud.talk.ui.theme.TalkSpecificViewThemeUtils
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
 import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.database.user.CurrentUserProviderImpl
-import com.nextcloud.talk.utils.database.user.CurrentUserProviderOldImpl
-import com.nextcloud.talk.utils.database.user.CurrentUserProviderOld
 import com.nextcloud.talk.logger.Logger
 import com.nextcloud.talk.utils.preferences.AppPreferences
 import com.nextcloud.talk.utils.preferences.AppPreferencesImpl
@@ -95,14 +93,11 @@ class ComposePreviewUtils private constructor(context: Context) {
     val userManager: UserManager
         get() = UserManager(userRepository)
 
-    val userProvider: CurrentUserProviderOld
-        get() = CurrentUserProviderOldImpl(userManager)
-
     val colorUtil: ColorUtil
         get() = ColorUtil(mContext)
 
     val materialScheme: MaterialSchemes
-        get() = MaterialSchemesProviderImpl(userProvider, colorUtil).getMaterialSchemesForCurrentUser()
+        get() = MaterialSchemesProviderImpl(mContext).getMaterialSchemesForCurrentUser()
 
     val viewThemeUtils: ViewThemeUtils
         get() {
