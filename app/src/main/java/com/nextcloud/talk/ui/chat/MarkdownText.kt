@@ -77,7 +77,7 @@ private const val CHIP_CORNER_RADIUS_DP = 16f
 private val TABLE_SEPARATOR_REGEX = Regex("""^\|[ :]*-{3,}""", RegexOption.MULTILINE)
 
 val validLinkRegex = Regex(
-    """(?<!\w)https?://(?:www\.)?[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+(?:/[^\s)]*)?""",
+    """(?<!\w)https?://(?:www\.)?[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+(?::\d{1,5})?(?:/[^\s)]*)?""",
     RegexOption.IGNORE_CASE
 )
 
@@ -110,6 +110,7 @@ fun MarkdownText(
     val messageId = message.id
     val onMessageLongClick = LocalMessageLongClickHandler.current
     val onLongClickState = rememberUpdatedState(onMessageLongClick)
+    val onClickState = rememberUpdatedState(onClick)
     val hasTable = remember(message.plainMessage) {
         message.plainMessage.contains(TABLE_SEPARATOR_REGEX)
     }
@@ -133,6 +134,11 @@ fun MarkdownText(
                     val gestureDetector = GestureDetector(
                         ctx,
                         object : GestureDetector.SimpleOnGestureListener() {
+                            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                                onClickState.value?.invoke()
+                                return false
+                            }
+
                             override fun onLongPress(e: MotionEvent) {
                                 onLongClickState.value(messageId)
                             }
@@ -223,7 +229,6 @@ fun MarkdownText(
                         textView.movementMethod = null
                         textView.setOnTouchListener(null)
                     }
-                    textView.setOnClickListener(onClick?.let { handler -> View.OnClickListener { handler() } })
                 }
             )
         }
