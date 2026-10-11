@@ -116,7 +116,7 @@
     </style>
 
     <style name="ChipIncomingTextAppearance" parent="TextAppearance.MaterialComponents.Chip">
-        <item name="android:textColor">#de000000</item>
+        <item name="android:textColor">#de262626</item>
         <item name="android:textSize">@dimen/chat_text_size</item>
     </style>
 
