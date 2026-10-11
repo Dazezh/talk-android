@@ -1297,7 +1297,7 @@ class MessageInputFragment : Fragment() {
 
     private fun themeMessageInputView() {
         binding.messageInputContainer.apply {
-            viewThemeUtils.talk.themeTranslucentCardView(this)
+            viewThemeUtils.talk.themeMessageInputCard(this)
         }
 
         binding.fragmentMessageInputView.findViewById<ImageView>(R.id.microphoneEnabledInfoBackground)?.let {
