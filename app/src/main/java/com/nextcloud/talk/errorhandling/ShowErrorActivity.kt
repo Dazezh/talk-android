@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -32,11 +31,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
-import com.nextcloud.android.common.ui.theme.MaterialSchemes
 import com.nextcloud.android.common.ui.util.extensions.toColorScheme
 import com.nextcloud.talk.BuildConfig
 import com.nextcloud.talk.R
 import com.nextcloud.talk.components.StandardAppBar
+import com.nextcloud.talk.ui.theme.BrandMaterialSchemes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -69,7 +68,7 @@ class ShowErrorActivity : AppCompatActivity() {
             crashTitle
 
         setContent {
-            val schemes = remember { MaterialSchemes.fromColor(ContextCompat.getColor(this, R.color.brand_seed)) }
+            val schemes = remember { BrandMaterialSchemes(this) }
             val colorScheme = remember(isNightMode) {
                 (if (isNightMode) schemes.darkScheme else schemes.lightScheme).toColorScheme()
             }

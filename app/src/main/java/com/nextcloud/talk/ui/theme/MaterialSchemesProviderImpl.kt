@@ -8,13 +8,12 @@
 package com.nextcloud.talk.ui.theme
 
 import android.content.Context
-import androidx.core.content.ContextCompat
 import com.nextcloud.android.common.ui.theme.MaterialSchemes
-import com.nextcloud.talk.R
 import javax.inject.Inject
 
-internal class MaterialSchemesProviderImpl @Inject constructor(private val context: Context) : MaterialSchemesProvider {
+internal class MaterialSchemesProviderImpl @Inject constructor(context: Context) : MaterialSchemesProvider {
 
-    override fun getMaterialSchemesForCurrentUser(): MaterialSchemes =
-        MaterialSchemes.fromColor(ContextCompat.getColor(context, R.color.brand_seed))
+    private val schemes: MaterialSchemes = BrandMaterialSchemes(context)
+
+    override fun getMaterialSchemesForCurrentUser(): MaterialSchemes = schemes
 }
