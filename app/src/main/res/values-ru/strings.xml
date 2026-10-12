@@ -172,6 +172,7 @@
     <string name="nc_change_cert_auth">Изменить сертификат для аутентификации</string>
     <string name="nc_change_password">Изменить пароль</string>
     <string name="nc_channel">Канал</string>
+    <string name="nc_channel_only_moderators_can_post">Канал доступен только для чтения</string>
     <string name="nc_chat_no_messages">Сообщений пока нет. Будьте первым, кто поздоровается!</string>
     <string name="nc_classified_conversation">Засекреченное обсуждение</string>
     <string name="nc_clear_edit_button">Отменить редактирование</string>
@@ -276,7 +277,8 @@
     <string name="nc_federation_no_invitations">Нет ожидающих приглашений</string>
     <string name="nc_federation_pending_invitation_hint">У вас есть ожидающие приглашения</string>
     <string name="nc_file_browser_back">Назад</string>
-    <string name="nc_file_permission_editable">Редактируемый</string>
+    <string name="nc_file_permission_editable">Редактирование</string>
+    <string name="nc_file_permission_view_only">Просмотр</string>
     <string name="nc_file_storage_permission">Требуется разрешение на доступ к файлу</string>
     <string name="nc_filter">Фильтровать обсуждения</string>
     <string name="nc_following_link">Пользователь, вошедший по публичной ссылке</string>
@@ -301,7 +303,7 @@
     <string name="nc_guest_access_resend_invitations_failed">Приглашения не были отправлены из-за ошибки.</string>
     <string name="nc_guest_access_resend_invitations_successful">Приглашения были разосланы повторно.</string>
     <string name="nc_guest_access_share_link">Поделиться ссылкой на обсуждение</string>
-    <string name="nc_hint_enter_a_message">Напишите сообщение …</string>
+    <string name="nc_hint_enter_a_message">Сообщение …</string>
     <string name="nc_ignore_battery_optimization_dialog_text">Для этого приложения не отключена оптимизация использования батареи. Чтобы уведомления работали в фоновом режиме, оОптимизацию использования батареи необходимо отключить. Нажмите «OK», перейдите в «Все приложения» → «%1$s», и выберите «Не оптимизировать» или «Разрешить работу в фоновом режиме → Не ограничивать».</string>
     <string name="nc_ignore_battery_optimization_dialog_title">Игнорировать оптимизацию батареи</string>
     <string name="nc_important_conversation">Важное обсуждение</string>
@@ -332,6 +334,9 @@
     <string name="nc_logs_share_diagnosis">Отчёт о диагностике</string>
     <string name="nc_logs_title">Журнал</string>
     <string name="nc_manual">Не задано</string>
+    <string name="nc_media_quality_original">Оригинальное</string>
+    <string name="nc_media_quality_original_hint">Отправка в оригинальном качестве расходует больше мобильного трафика.</string>
+    <string name="nc_media_quality_reduced">Сжатое</string>
     <string name="nc_mark_as_read">Отметить прочитанным</string>
     <string name="nc_mark_as_unread">Отметить непрочитанным</string>
     <string name="nc_meeting_ended">Встреча завершена</string>
@@ -490,6 +495,7 @@
     <string name="nc_settings_incognito_keyboard_desc">Указывает клавиатуре отключить персонализированное обучение (без гарантий)</string>
     <string name="nc_settings_incognito_keyboard_title">Клавиатура инкогнито</string>
     <string name="nc_settings_logs_title">Журнал</string>
+    <string name="nc_settings_media_quality_title">Качество отправляемых файлов</string>
     <string name="nc_settings_no_ringtone">Без звука</string>
     <string name="nc_settings_no_talk_installed">На сервере, к которому вы пытаетесь подключиться, приложение «Конференции» не установлено</string>
     <string name="nc_settings_notification_sounds_post_oreo">Уведомления</string>
