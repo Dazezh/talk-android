@@ -952,7 +952,8 @@ class SettingsActivity :
                 settingsPhoneBookIntegrationSwitch,
                 settingsReadPrivacySwitch,
                 settingsTypingStatusSwitch,
-                settingsProxyUseCredentialsSwitch
+                settingsProxyUseCredentialsSwitch,
+                settingsMessageInputRectangularSwitch
             ).forEach(viewThemeUtils.talk::colorSwitch)
         }
     }
