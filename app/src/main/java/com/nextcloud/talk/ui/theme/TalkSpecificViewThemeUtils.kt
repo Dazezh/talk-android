@@ -10,6 +10,7 @@ package com.nextcloud.talk.ui.theme
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Typeface
@@ -21,6 +22,7 @@ import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
@@ -35,6 +37,7 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.updateLayoutParams
 import androidx.emoji2.emojipicker.EmojiPickerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -70,9 +73,31 @@ class TalkSpecificViewThemeUtils @Inject constructor(
 ) : ViewThemeUtilsBase(schemes) {
     private val dynamicColor = MaterialDynamicColors()
 
-    fun themeMessageInputCard(cardView: MaterialCardView) {
+    fun themeMessageInputCard(cardView: MaterialCardView, rectangular: Boolean) {
         withScheme(cardView) { scheme ->
-            cardView.backgroundTintList = ColorStateList.valueOf(dynamicColor.surface().getArgb(scheme))
+            val color = if (rectangular) dynamicColor.surface() else dynamicColor.surfaceVariant()
+            cardView.backgroundTintList = ColorStateList.valueOf(color.getArgb(scheme))
+        }
+
+        cardView.radius = if (rectangular) {
+            0f
+        } else {
+            cardView.resources.getDimension(R.dimen.button_corner_radius)
+        }
+        val margin = if (rectangular) 0 else cardView.resources.getDimensionPixelSize(R.dimen.standard_half_margin)
+        cardView.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            marginStart = margin
+            marginEnd = margin
+            bottomMargin = margin
+        }
+    }
+
+    /** Paints the container hosting the input bar so a flat bar reaches the system bar. */
+    fun themeMessageInputHostContainer(host: View, rectangular: Boolean) {
+        withScheme(host) { scheme ->
+            host.setBackgroundColor(
+                if (rectangular) dynamicColor.surface().getArgb(scheme) else Color.TRANSPARENT
+            )
         }
     }
 

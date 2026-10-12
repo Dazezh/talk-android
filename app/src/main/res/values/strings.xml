@@ -96,6 +96,7 @@ How to translate with transifex:
 
     <!-- Settings -->
     <string name="nc_settings_advanced_title">Advanced</string>
+    <string name="nc_settings_message_input_rectangular_title">Поле ввода прямоугольное</string>
     <string name="nc_settings_proxy_type_key" translatable="false">proxy_type</string>
     <string name="nc_settings_proxy_type_title">Proxy type</string>
     <string name="nc_settings_proxy_host_key" translatable="false">proxy_host</string>

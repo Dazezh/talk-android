@@ -128,6 +128,10 @@ public interface AppPreferences {
 
     void removeIncognitoKeyboard();
 
+    boolean getMessageInputRectangular();
+
+    void setMessageInputRectangular(boolean value);
+
     boolean getIsShowEcosystem();
 
     void setShowEcosystem(boolean value);

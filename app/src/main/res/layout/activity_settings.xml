@@ -863,6 +863,30 @@
                     android:textStyle="bold" />
 
                 <LinearLayout
+                    android:id="@+id/settings_message_input_rectangular"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:orientation="horizontal"
+                    android:padding="@dimen/standard_half_padding">
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/standard_half_margin"
+                        android:layout_weight="1"
+                        android:text="@string/nc_settings_message_input_rectangular_title"
+                        android:textSize="@dimen/headline_text_size" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/settings_message_input_rectangular_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:gravity="center_vertical" />
+                </LinearLayout>
+
+                <LinearLayout
                     android:id="@+id/settings_media_quality"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

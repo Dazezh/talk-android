@@ -26,8 +26,10 @@
         android:id="@+id/messageInputContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/standard_half_margin"
+        android:layout_marginBottom="@dimen/standard_half_margin"
         app:cardBackgroundColor="@color/bg_message_list_incoming_bubble"
-        app:cardCornerRadius="@dimen/zero"
+        app:cardCornerRadius="@dimen/button_corner_radius"
         app:cardElevation="@dimen/zero"
         app:strokeWidth="@dimen/zero">
 

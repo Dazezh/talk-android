@@ -1199,6 +1199,13 @@ class SettingsActivity :
         setupMediaQualitySetting()
         setupPhoneBookIntegrationSetting()
 
+        binding.settingsMessageInputRectangularSwitch.isChecked = appPreferences.messageInputRectangular
+        binding.settingsMessageInputRectangular.setOnClickListener {
+            val isChecked = binding.settingsMessageInputRectangularSwitch.isChecked
+            binding.settingsMessageInputRectangularSwitch.isChecked = !isChecked
+            appPreferences.setMessageInputRectangular(!isChecked)
+        }
+
         binding.settingsScreenSecuritySwitch.isChecked = appPreferences.isScreenSecured
         binding.settingsScreenSecurity.setOnClickListener {
             val isChecked = binding.settingsScreenSecuritySwitch.isChecked

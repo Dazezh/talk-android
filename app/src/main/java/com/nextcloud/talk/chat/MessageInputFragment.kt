@@ -98,6 +98,7 @@ import com.nextcloud.talk.utils.ImageEmojiEditText
 import com.nextcloud.talk.utils.SpreedFeatures
 import com.nextcloud.talk.utils.bundle.BundleKeys
 import com.nextcloud.talk.utils.message.MessageUtils
+import com.nextcloud.talk.utils.preferences.AppPreferences
 import com.nextcloud.talk.utils.text.Spans
 import com.otaliastudios.autocomplete.Autocomplete
 import kotlinx.coroutines.flow.collect
@@ -130,6 +131,9 @@ class MessageInputFragment : Fragment() {
 
     @Inject
     lateinit var stickerImageLoader: StickerImageLoader
+
+    @Inject
+    lateinit var appPreferences: AppPreferences
 
     private val messageInputViewModel: MessageInputViewModel by activityViewModels()
     private val stickersViewModel: StickersViewModel by viewModels { viewModelFactory }
@@ -191,6 +195,9 @@ class MessageInputFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        (view.parent as? View)?.let {
+            viewThemeUtils.talk.themeMessageInputHostContainer(it, appPreferences.messageInputRectangular)
+        }
         initObservers()
 
         binding.fragmentCreateThreadView.createThreadView.findViewById<EmojiTextInputEditText>(
@@ -1296,8 +1303,9 @@ class MessageInputFragment : Fragment() {
     }
 
     private fun themeMessageInputView() {
+        val rectangular = appPreferences.messageInputRectangular
         binding.messageInputContainer.apply {
-            viewThemeUtils.talk.themeMessageInputCard(this)
+            viewThemeUtils.talk.themeMessageInputCard(this, rectangular)
         }
 
         binding.fragmentMessageInputView.findViewById<ImageView>(R.id.microphoneEnabledInfoBackground)?.let {

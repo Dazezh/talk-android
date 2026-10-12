@@ -600,8 +600,9 @@ class ChatActivity :
                     systemBarInsets.left,
                     systemBarInsets.top,
                     systemBarInsets.right,
-                    bottomPadding
+                    0
                 )
+                binding.fragmentContainerActivityChat.setPadding(0, 0, 0, bottomPadding)
                 WindowInsetsCompat.CONSUMED
             }
         } else {

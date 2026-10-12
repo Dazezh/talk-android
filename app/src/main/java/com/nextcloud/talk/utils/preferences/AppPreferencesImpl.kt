@@ -337,6 +337,18 @@ class AppPreferencesImpl(val context: Context) : AppPreferences {
         setIncognitoKeyboard(false)
     }
 
+    override fun getMessageInputRectangular(): Boolean =
+        runBlocking {
+            async { readBoolean(MESSAGE_INPUT_RECTANGULAR).first() }
+        }.getCompleted()
+
+    override fun setMessageInputRectangular(value: Boolean) =
+        runBlocking<Unit> {
+            async {
+                writeBoolean(MESSAGE_INPUT_RECTANGULAR, value)
+            }
+        }
+
     override fun getIsShowEcosystem(): Boolean {
         val read = runBlocking { async { readBoolean(SHOW_ECOSYSTEM, true).first() } }.getCompleted()
         return read
@@ -698,6 +710,7 @@ class AppPreferencesImpl(val context: Context) : AppPreferences {
         const val SCREEN_LOCK = "screen_lock"
         const val CALL_MICROPHONE_MUTED = "call_microphone_muted"
         const val INCOGNITO_KEYBOARD = "incognito_keyboard"
+        const val MESSAGE_INPUT_RECTANGULAR = "message_input_rectangular"
         const val SHOW_ECOSYSTEM = "SHOW_ECOSYSTEM"
         const val PHONE_BOOK_INTEGRATION = "phone_book_integration"
         const val COMPRESS_UPLOAD_IMAGES = "compress_upload_images"
