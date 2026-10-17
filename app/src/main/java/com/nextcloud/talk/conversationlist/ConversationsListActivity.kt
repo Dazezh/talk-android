@@ -240,7 +240,7 @@ class ConversationsListActivity : BaseActivity() {
 
     private fun showSplashAnimation() {
         val contentRoot = findViewById<ViewGroup>(android.R.id.content)
-        val overlay = layoutInflater.inflate(R.layout.view_ralk_splash, contentRoot, false)
+        val overlay = layoutInflater.inflate(R.layout.view_ralk_splash, contentRoot, false) as ViewGroup
         addContentView(
             overlay,
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
