@@ -33,6 +33,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.net.toUri
+import androidx.core.view.doOnPreDraw
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.work.Data
@@ -245,19 +246,22 @@ class ConversationsListActivity : BaseActivity() {
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
 
-        overlay.findViewById<ImageView>(R.id.splashLogo)?.let { logo ->
-            (logo.drawable as? Animatable)?.start()
-        }
+        val animation = overlay.findViewById<ImageView>(R.id.splashLogo)?.drawable as? Animatable
 
-        overlay.postDelayed(
-            {
-                overlay.animate()
-                    .alpha(0f)
-                    .setDuration(SPLASH_FADE_MS)
-                    .withEndAction { (overlay.parent as? ViewGroup)?.removeView(overlay) }
-            },
-            SPLASH_HOLD_MS
-        )
+        // The activity can take longer than the animation to render its first frame, so the
+        // animation has to start right before the overlay is drawn instead of in onCreate.
+        overlay.doOnPreDraw {
+            animation?.start()
+            overlay.postDelayed(
+                {
+                    overlay.animate()
+                        .alpha(0f)
+                        .setDuration(SPLASH_FADE_MS)
+                        .withEndAction { (overlay.parent as? ViewGroup)?.removeView(overlay) }
+                },
+                SPLASH_HOLD_MS
+            )
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -1614,7 +1618,7 @@ class ConversationsListActivity : BaseActivity() {
         const val ROOM_TYPE_ONE_ONE = "1"
         private const val NOTE_TO_SELF_SHORTCUT_ID = "NOTE_TO_SELF_SHORTCUT_ID"
         private const val KEY_ACCOUNT_DIALOG_VISIBLE = "account_dialog_visible"
-        private const val SPLASH_HOLD_MS = 660L
+        private const val SPLASH_HOLD_MS = 600L
         private const val SPLASH_FADE_MS = 180L
     }
 }
