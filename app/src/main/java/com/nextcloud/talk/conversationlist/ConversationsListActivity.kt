@@ -13,15 +13,15 @@ import android.content.ActivityNotFoundException
 import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.drawable.Animatable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
+import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -246,12 +246,15 @@ class ConversationsListActivity : BaseActivity() {
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
 
-        val animation = overlay.findViewById<ImageView>(R.id.splashLogo)?.drawable as? Animatable
+        val logo = overlay.findViewById<ViewGroup>(R.id.splashLogo)
 
         // The activity can take longer than the animation to render its first frame, so the
-        // animation has to start right before the overlay is drawn instead of in onCreate.
+        // letters are placed and animated right before the overlay is drawn instead of in onCreate.
         overlay.doOnPreDraw {
-            animation?.start()
+            animateLetter(overlay, R.id.splashLetterA, LETTER_A_OFFSET, LETTER_A_DELAY_MS, logo.width)
+            animateLetter(overlay, R.id.splashLetterL, LETTER_L_OFFSET, LETTER_L_DELAY_MS, logo.width)
+            animateLetter(overlay, R.id.splashLetterK, LETTER_K_OFFSET, LETTER_K_DELAY_MS, logo.width)
+
             overlay.postDelayed(
                 {
                     overlay.animate()
@@ -262,6 +265,18 @@ class ConversationsListActivity : BaseActivity() {
                 SPLASH_HOLD_MS
             )
         }
+    }
+
+    private fun animateLetter(overlay: ViewGroup, viewId: Int, offsetUnits: Float, delayMs: Long, logoWidth: Int) {
+        val letter = overlay.findViewById<View>(viewId) ?: return
+        letter.alpha = 0f
+        letter.translationX = logoWidth * offsetUnits / LOGO_VIEWPORT_WIDTH
+        letter.animate()
+            .alpha(1f)
+            .translationX(0f)
+            .setStartDelay(delayMs)
+            .setDuration(SPLASH_LETTER_DURATION_MS)
+            .setInterpolator(DecelerateInterpolator())
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -1620,5 +1635,16 @@ class ConversationsListActivity : BaseActivity() {
         private const val KEY_ACCOUNT_DIALOG_VISIBLE = "account_dialog_visible"
         private const val SPLASH_HOLD_MS = 600L
         private const val SPLASH_FADE_MS = 180L
+        private const val SPLASH_LETTER_DURATION_MS = 320L
+        private const val LOGO_VIEWPORT_WIDTH = 65.890519f
+
+        // Offsets place the glyph centres of A, L and K on the centre of R in the wordmark viewport,
+        // so every letter starts where the logo begins and spreads out to its own position.
+        private const val LETTER_A_OFFSET = -20.6f
+        private const val LETTER_L_OFFSET = -34.0f
+        private const val LETTER_K_OFFSET = -47.3f
+        private const val LETTER_A_DELAY_MS = 80L
+        private const val LETTER_L_DELAY_MS = 150L
+        private const val LETTER_K_DELAY_MS = 220L
     }
 }

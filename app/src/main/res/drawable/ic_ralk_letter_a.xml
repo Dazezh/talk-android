@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Nextcloud Talk - Android Client
+  ~
+  ~ SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="102dp"
+    android:viewportWidth="65.890519"
+    android:viewportHeight="27.915705">
+
+    <group
+        android:translateX="-120.44325"
+        android:translateY="-94.459275">
+
+        <path
+            android:fillColor="@color/white"
+            android:pathData="M 151.86252 101.52241 L 147.31861 115.31175 L 150.3608 115.31175 L 151.34886 112.03236 L 155.95168 112.03236 L 156.93973 115.31175 L 160.06099 115.31175 L 155.57651 101.52241 L 151.86252 101.52241 z M 153.58128 104.24886 L 153.67998 104.24886 L 155.22097 109.48368 L 152.05992 109.48368 L 153.58128 104.24886 z" />
+    </group>
+</vector>

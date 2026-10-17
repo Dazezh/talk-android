@@ -11,13 +11,42 @@
     android:layout_height="match_parent"
     android:background="@color/colorPrimary"
     android:clickable="true"
+    android:clipChildren="false"
     android:focusable="true">
 
-    <androidx.appcompat.widget.AppCompatImageView
+    <FrameLayout
         android:id="@+id/splashLogo"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="240dp"
+        android:layout_height="102dp"
         android:layout_gravity="center"
-        android:contentDescription="@null"
-        app:srcCompat="@drawable/ic_ralk_logo_animated" />
+        android:clipChildren="false">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/splashLetterR"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            app:srcCompat="@drawable/ic_ralk_letter_r" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/splashLetterA"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            app:srcCompat="@drawable/ic_ralk_letter_a" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/splashLetterL"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            app:srcCompat="@drawable/ic_ralk_letter_l" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/splashLetterK"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            app:srcCompat="@drawable/ic_ralk_letter_k" />
+    </FrameLayout>
 </FrameLayout>
