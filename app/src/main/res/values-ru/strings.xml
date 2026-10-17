@@ -9,7 +9,7 @@
     <string name="archive_hint">После архивации обсуждение будет скрыто. Выберите фильтр \"Архивировано\", чтобы увидеть архивированные обсуждения. Уведомления о прямых упоминаниях все еще будут получены.</string>
     <string name="archived">В архиве</string>
     <string name="archived_conversation">Архивировано %1$s</string>
-    <string name="audio_call">Голосовой звонок</string>
+    <string name="audio_call">Аудио</string>
     <string name="audio_output_bluetooth">Bluetooth</string>
     <string name="audio_output_dialog_headline">Аудиовыход</string>
     <string name="audio_output_phone">Телефон</string>
@@ -779,8 +779,9 @@
     <string name="userinfo_error_text">Не удалось получить личную информации о пользователе</string>
     <string name="userinfo_no_info_headline">Личная информация не указана</string>
     <string name="userinfo_no_info_text">На странице профиля укажите своё имя, добавьте изображение и подробные сведения</string>
-    <string name="video_call">Видеозвонок</string>
+    <string name="video_call">Видео</string>
     <string name="voice_room">Голосовой чат</string>
+    <string name="call_in_progress">Присоединиться к звонку</string>
     <string name="voice_room_preset">Присоединяйтесь к звонку напрямую, идеально подходит для встреч или спонтанных встреч</string>
     <string name="whats_your_status">Какой у вас статус?</string>
     <plurals name="nc_new_messages_count">

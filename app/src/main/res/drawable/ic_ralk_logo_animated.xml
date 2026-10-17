@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Nextcloud Talk - Android Client
+  ~
+  ~ SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+  ~ SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_ralk_logo_animation_start">
+
+    <target
+        android:name="letter_a"
+        android:animation="@animator/ic_ralk_logo_letter_a" />
+    <target
+        android:name="letter_l"
+        android:animation="@animator/ic_ralk_logo_letter_l" />
+    <target
+        android:name="letter_k"
+        android:animation="@animator/ic_ralk_logo_letter_k" />
+</animated-vector>
