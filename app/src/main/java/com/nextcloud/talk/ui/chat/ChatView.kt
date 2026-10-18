@@ -386,7 +386,8 @@ fun ChatView(
         LazyColumn(
             state = listState,
             reverseLayout = true,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            // 4dp between grouped messages; messages that start a new author add 2dp in their own padding.
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(bottom = 20.dp),
             modifier = Modifier
                 .fillMaxSize()
@@ -405,7 +406,7 @@ fun ChatView(
                     is ChatViewModel.ChatItem.MessageItem -> {
                         Box(
                             modifier = Modifier.padding(
-                                top = if (!chatItem.uiMessage.isGrouped) 4.dp else 0.dp
+                                top = if (!chatItem.uiMessage.isGrouped) 2.dp else 0.dp
                             )
                         ) {
                             ChatMessageView(
@@ -444,7 +445,7 @@ fun ChatView(
                     is ChatViewModel.ChatItem.MediaGroupItem -> {
                         Box(
                             modifier = Modifier.padding(
-                                top = if (!chatItem.messages.first().isGrouped) 4.dp else 0.dp
+                                top = if (!chatItem.messages.first().isGrouped) 2.dp else 0.dp
                             )
                         ) {
                             MediaGroupMessage(

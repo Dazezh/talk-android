@@ -98,8 +98,18 @@ fun MarkdownText(
     val linkColorArgb = MaterialTheme.colorScheme.primary.toArgb()
     val chipBgColor = MaterialTheme.colorScheme.surfaceContainerHighest.toArgb()
     val chipTextColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    val selfChipBgColor = themedColors.primary.toArgb()
-    val selfChipTextColor = themedColors.onPrimary.toArgb()
+    // A self mention in an outgoing message is inverted: the bubble already uses the accent
+    // container, so an accent coloured chip would blend into it.
+    val selfChipBgColor = if (message.incoming) {
+        themedColors.primary.toArgb()
+    } else {
+        themedColors.onPrimaryContainer.toArgb()
+    }
+    val selfChipTextColor = if (message.incoming) {
+        themedColors.onPrimary.toArgb()
+    } else {
+        themedColors.primaryContainer.toArgb()
+    }
     val density = LocalDensity.current
     val chipStartPaddingPx = with(density) { CHIP_START_PADDING_DP.dp.toPx() }
     val chipEndPaddingPx = with(density) { CHIP_END_PADDING_DP.dp.toPx() }

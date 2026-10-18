@@ -109,11 +109,15 @@ private const val HALF_OPACITY = 127
 private const val MESSAGE_LENGTH_THRESHOLD = 25
 private const val ANIMATED_BLINK = 500
 private const val MESSAGE_BUBBLE_MAX_WIDTH_FRACTION = 0.8f
+private const val IN_BUBBLE_META_ALPHA = 0.72f
+private const val QUOTE_CONTAINER_ALPHA = 0.12f
 
 private val TAG = ChatActivity::class.java.simpleName
 
-private val bubbleRadiusBig = 10.dp
-private val bubbleRadiusSmall = 2.dp
+// The grouped joint currently matches the outer corners; the two tokens stay separate so the joint
+// can shrink again without touching the grouped/ungrouped shape logic.
+private val bubbleRadiusBig = 16.dp
+private val bubbleRadiusSmall = 16.dp
 private val quoteThumbnailSize = 40.dp
 private val quoteIconContainerRadius = 8.dp
 private val quoteIconSize = 24.dp
@@ -618,22 +622,26 @@ private fun MessageReactionChip(
 ) {
     val themedColors = LocalViewThemeUtils.current.getColorScheme(LocalContext.current)
 
-    val targetBackgroundColor = if (reaction.isSelfReaction) {
-        themedColors.primaryContainer
-    } else if (incoming) {
-        colorResource(R.color.bg_message_list_incoming_bubble)
-    } else {
-        themedColors.surfaceVariant
+    // A chip sits half over the bubble, so on an accent bubble it is drawn in the on-bubble colours.
+    // A self reaction inverts, otherwise it would be invisible on its own container colour.
+    val selfReactionOnAccent = reaction.isSelfReaction && !incoming
+    val targetBackgroundColor = when {
+        selfReactionOnAccent -> themedColors.onPrimaryContainer
+        reaction.isSelfReaction -> themedColors.primaryContainer
+        incoming -> colorResource(R.color.bg_message_list_incoming_bubble)
+        else -> themedColors.surface
     }
     val targetBorderColor = if (reaction.isSelfReaction) {
         themedColors.primary
-    } else {
+    } else if (incoming) {
         themedColors.surface
-    }
-    val targetTextColor = if (incoming || reaction.isSelfReaction) {
-        colorResource(R.color.high_emphasis_text)
     } else {
-        themedColors.onSurfaceVariant
+        themedColors.onPrimaryContainer.copy(alpha = 0.24f)
+    }
+    val targetTextColor = when {
+        selfReactionOnAccent -> themedColors.primaryContainer
+        incoming || reaction.isSelfReaction -> colorResource(R.color.high_emphasis_text)
+        else -> themedColors.onPrimaryContainer
     }
 
     val colorSpec = tween<Color>(REACTION_COLOR_ANIMATION_MILLIS)
@@ -695,7 +703,15 @@ private fun AnimatedContentTransitionScope<Int>.reactionAmountTransition(countin
 }
 
 @Composable
-private fun MessageMetadata(uiMessage: ChatMessageUi, color: Color = colorScheme.onSurfaceVariant) {
+private fun bubbleMetadataColor(message: ChatMessageUi): Color =
+    if (message.incoming) {
+        colorScheme.onSurfaceVariant
+    } else {
+        colorScheme.onPrimaryContainer.copy(alpha = IN_BUBBLE_META_ALPHA)
+    }
+
+@Composable
+private fun MessageMetadata(uiMessage: ChatMessageUi, color: Color = bubbleMetadataColor(uiMessage)) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End,
@@ -781,8 +797,9 @@ private fun ColumnScope.CaptionWithMetadata(
 @Suppress("LongMethod")
 @Composable
 fun CommonMessageQuote(message: ChatMessageUi, contentMinWidth: Dp = 0.dp) {
-    val lineColor = if (!message.incoming) {
-        colorScheme.primary
+    val outgoing = !message.incoming
+    val lineColor = if (outgoing) {
+        colorScheme.onPrimaryContainer
     } else {
         colorScheme.onSurfaceVariant
     }
@@ -832,27 +849,32 @@ fun CommonMessageQuote(message: ChatMessageUi, contentMinWidth: Dp = 0.dp) {
             is MessageTypeContent.Voice -> QuoteIconRow(
                 actorDisplayName = message.actorDisplayName,
                 iconRes = R.drawable.ic_baseline_mic_24,
-                label = stringResource(R.string.nc_voice_message)
+                label = stringResource(R.string.nc_voice_message),
+                outgoing = outgoing
             )
             is MessageTypeContent.Poll -> QuoteIconRow(
                 actorDisplayName = message.actorDisplayName,
                 iconRes = R.drawable.ic_baseline_bar_chart_24,
-                label = c.pollName
+                label = c.pollName,
+                outgoing = outgoing
             )
             is MessageTypeContent.Deck -> QuoteIconRow(
                 actorDisplayName = message.actorDisplayName,
                 iconRes = R.drawable.deck,
-                label = c.cardName
+                label = c.cardName,
+                outgoing = outgoing
             )
             is MessageTypeContent.Geolocation -> QuoteIconRow(
                 actorDisplayName = message.actorDisplayName,
                 iconRes = R.drawable.baseline_location_pin_24,
-                label = c.name
+                label = c.name,
+                outgoing = outgoing
             )
             is MessageTypeContent.Sticker -> QuoteIconRow(
                 actorDisplayName = message.actorDisplayName,
                 iconRes = R.drawable.ic_insert_emoticon_black_24dp,
-                label = stringResource(R.string.nc_sticker)
+                label = stringResource(R.string.nc_sticker),
+                outgoing = outgoing
             )
             else -> QuoteTextContent(message, onClick = { onQuotedMessageClick(message.id) })
         }
@@ -861,11 +883,13 @@ fun CommonMessageQuote(message: ChatMessageUi, contentMinWidth: Dp = 0.dp) {
 
 @Composable
 private fun QuoteTextContent(message: ChatMessageUi, onClick: () -> Unit) {
+    val outgoing = !message.incoming
+    val metaColor = if (outgoing) colorScheme.onPrimaryContainer else colorResource(R.color.no_emphasis_text)
     Column(modifier = Modifier.combinedClickable(onClick = onClick)) {
         Text(
             message.actorDisplayName,
             fontSize = authorTextSize,
-            color = colorResource(R.color.no_emphasis_text)
+            color = metaColor
         )
 
         val isInspectionMode = LocalInspectionMode.current
@@ -879,7 +903,7 @@ private fun QuoteTextContent(message: ChatMessageUi, onClick: () -> Unit) {
             modifier = Modifier.padding(end = 4.dp),
             textStyle = TextStyle(
                 fontSize = fontSize,
-                color = colorScheme.onSurface,
+                color = if (outgoing) colorScheme.onPrimaryContainer else colorScheme.onSurface,
                 lineHeight = fontSize * LINE_SPACING
             ),
             maxLines = 4,
@@ -891,7 +915,16 @@ private fun QuoteTextContent(message: ChatMessageUi, onClick: () -> Unit) {
 }
 
 @Composable
+private fun quoteContainerColor(outgoing: Boolean): Color =
+    if (outgoing) colorScheme.onPrimaryContainer.copy(alpha = QUOTE_CONTAINER_ALPHA) else colorScheme.surfaceVariant
+
+@Composable
+private fun quoteSecondaryColor(outgoing: Boolean): Color =
+    if (outgoing) colorScheme.onPrimaryContainer else colorScheme.onSurfaceVariant
+
+@Composable
 private fun QuoteMediaRow(message: ChatMessageUi, content: MessageTypeContent.Media) {
+    val outgoing = !message.incoming
     val label = message.messageParameters.values
         .find { it["type"] == "file" }
         ?.get("name")
@@ -902,7 +935,7 @@ private fun QuoteMediaRow(message: ChatMessageUi, content: MessageTypeContent.Me
                 .padding(end = 8.dp)
                 .size(quoteThumbnailSize)
                 .clip(RoundedCornerShape(quoteIconContainerRadius))
-                .background(colorScheme.surfaceVariant),
+                .background(quoteContainerColor(outgoing)),
             contentAlignment = Alignment.Center
         ) {
             if (content.previewUrl != null) {
@@ -917,51 +950,52 @@ private fun QuoteMediaRow(message: ChatMessageUi, content: MessageTypeContent.Me
                 Icon(
                     painter = painterResource(content.drawableResourceId),
                     contentDescription = null,
-                    tint = colorScheme.onSurfaceVariant,
+                    tint = quoteSecondaryColor(outgoing),
                     modifier = Modifier.size(quoteIconSize)
                 )
             }
         }
-        QuoteIconRowText(author = message.actorDisplayName, label = label)
+        QuoteIconRowText(author = message.actorDisplayName, label = label, outgoing = outgoing)
     }
 }
 
 @Composable
-private fun QuoteIconRow(actorDisplayName: String, iconRes: Int, label: String) {
+private fun QuoteIconRow(actorDisplayName: String, iconRes: Int, label: String, outgoing: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
                 .padding(end = 8.dp)
                 .size(quoteThumbnailSize)
                 .clip(RoundedCornerShape(quoteIconContainerRadius))
-                .background(colorScheme.surfaceVariant),
+                .background(quoteContainerColor(outgoing)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 painter = painterResource(iconRes),
                 contentDescription = null,
-                tint = colorScheme.onSurfaceVariant,
+                tint = quoteSecondaryColor(outgoing),
                 modifier = Modifier.size(quoteIconSize)
             )
         }
-        QuoteIconRowText(author = actorDisplayName, label = label)
+        QuoteIconRowText(author = actorDisplayName, label = label, outgoing = outgoing)
     }
 }
 
 @Composable
-private fun QuoteIconRowText(author: String, label: String) {
+private fun QuoteIconRowText(author: String, label: String, outgoing: Boolean) {
+    val authorColor = if (outgoing) colorScheme.onPrimaryContainer else colorResource(R.color.no_emphasis_text)
     Column {
         Text(
             author,
             fontSize = authorTextSize,
-            color = colorResource(R.color.no_emphasis_text)
+            color = authorColor
         )
         Text(
             label,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.labelMedium,
-            color = colorScheme.onSurfaceVariant
+            color = quoteSecondaryColor(outgoing)
         )
     }
 }

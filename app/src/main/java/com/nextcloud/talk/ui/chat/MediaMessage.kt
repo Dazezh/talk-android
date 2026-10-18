@@ -96,12 +96,10 @@ private const val TAG = "MediaMessage"
 
 // bubbleRadiusBig (ChatMessageScaffold.kt) minus mediaInset below, so the media's own rounded
 // corner nests concentrically inside the bubble's corner instead of a visibly mismatched arc.
-private val mediaRadiusBig = 6.dp
+private val mediaRadiusBig = 12.dp
 
-// bubbleRadiusSmall (2.dp) minus mediaInset would go negative, so this can't nest concentrically
-// like mediaRadiusBig does - a small fixed rounding instead of a hard 0 corner still looks better
-// than a perfectly sharp edge sitting inside the bubble's own (slightly rounded) grouped corner.
-private val mediaRadiusSmall = 2.dp
+// Grouped bubbles use the same radius as regular ones, so the media follows them there as well.
+private val mediaRadiusSmall = 12.dp
 
 private val uploadSpinnerSize = 56.dp
 private val uploadSpinnerStrokeWidth = 3.dp
