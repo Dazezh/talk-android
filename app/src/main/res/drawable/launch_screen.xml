@@ -9,7 +9,7 @@
 
     <item android:drawable="@color/colorPrimary" />
     <item
-        android:drawable="@drawable/ic_ralk_logo"
+        android:drawable="@drawable/ic_ralk_splash_letter_r"
         android:gravity="center" />
 
 </layer-list>

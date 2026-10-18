@@ -32,6 +32,7 @@
             android:id="@+id/splashLetterA"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:alpha="0"
             android:contentDescription="@null"
             app:srcCompat="@drawable/ic_ralk_letter_a" />
 
@@ -39,6 +40,7 @@
             android:id="@+id/splashLetterL"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:alpha="0"
             android:contentDescription="@null"
             app:srcCompat="@drawable/ic_ralk_letter_l" />
 
@@ -46,6 +48,7 @@
             android:id="@+id/splashLetterK"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:alpha="0"
             android:contentDescription="@null"
             app:srcCompat="@drawable/ic_ralk_letter_k" />
     </FrameLayout>

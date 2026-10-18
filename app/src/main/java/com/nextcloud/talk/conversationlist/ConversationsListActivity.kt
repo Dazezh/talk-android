@@ -239,21 +239,26 @@ class ConversationsListActivity : BaseActivity() {
     }
 
     private fun showSplashAnimation() {
-        val contentRoot = findViewById<ViewGroup>(android.R.id.content)
-        val overlay = layoutInflater.inflate(R.layout.view_ralk_splash, contentRoot, false) as ViewGroup
-        addContentView(
+        // The overlay covers the whole window, so the letters line up with the launch screen that
+        // shows the R in the centre of the window.
+        val windowRoot = window.decorView as ViewGroup
+        val overlay = layoutInflater.inflate(R.layout.view_ralk_splash, windowRoot, false) as ViewGroup
+        windowRoot.addView(
             overlay,
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
 
         val logo = overlay.findViewById<ViewGroup>(R.id.splashLogo)
 
-        // The activity can take longer than the animation to render its first frame, so the
-        // letters are placed and animated right before the overlay is drawn instead of in onCreate.
+        // The activity can render its first frame long after onCreate, so the letters are placed and
+        // started right before the overlay is drawn, on the frame that replaces the launch screen.
         overlay.doOnPreDraw {
-            animateLetter(overlay, R.id.splashLetterA, LETTER_A_OFFSET, LETTER_A_DELAY_MS, logo.width)
-            animateLetter(overlay, R.id.splashLetterL, LETTER_L_OFFSET, LETTER_L_DELAY_MS, logo.width)
-            animateLetter(overlay, R.id.splashLetterK, LETTER_K_OFFSET, LETTER_K_DELAY_MS, logo.width)
+            val scale = logo.width / LOGO_VIEWPORT_WIDTH
+
+            animateLetter(overlay, R.id.splashLetterR, LETTER_R_CENTRE_X, 0L, scale)
+            animateLetter(overlay, R.id.splashLetterA, LETTER_A_CENTRE_X, LETTER_A_DELAY_MS, scale)
+            animateLetter(overlay, R.id.splashLetterL, LETTER_L_CENTRE_X, LETTER_L_DELAY_MS, scale)
+            animateLetter(overlay, R.id.splashLetterK, LETTER_K_CENTRE_X, LETTER_K_DELAY_MS, scale)
 
             overlay.postDelayed(
                 {
@@ -267,10 +272,13 @@ class ConversationsListActivity : BaseActivity() {
         }
     }
 
-    private fun animateLetter(overlay: ViewGroup, viewId: Int, offsetUnits: Float, delayMs: Long, logoWidth: Int) {
+    /**
+     * Puts a letter on the horizontal centre of the screen, where the launch screen shows the R, and
+     * animates it to its place in the wordmark.
+     */
+    private fun animateLetter(overlay: ViewGroup, viewId: Int, centreX: Float, delayMs: Long, scale: Float) {
         val letter = overlay.findViewById<View>(viewId) ?: return
-        letter.alpha = 0f
-        letter.translationX = logoWidth * offsetUnits / LOGO_VIEWPORT_WIDTH
+        letter.translationX = (LOGO_CENTRE_X - centreX) * scale
         letter.animate()
             .alpha(1f)
             .translationX(0f)
@@ -1633,18 +1641,20 @@ class ConversationsListActivity : BaseActivity() {
         const val ROOM_TYPE_ONE_ONE = "1"
         private const val NOTE_TO_SELF_SHORTCUT_ID = "NOTE_TO_SELF_SHORTCUT_ID"
         private const val KEY_ACCOUNT_DIALOG_VISIBLE = "account_dialog_visible"
-        private const val SPLASH_HOLD_MS = 600L
-        private const val SPLASH_FADE_MS = 180L
-        private const val SPLASH_LETTER_DURATION_MS = 320L
+        private const val SPLASH_HOLD_MS = 950L
+        private const val SPLASH_FADE_MS = 220L
+        private const val SPLASH_LETTER_DURATION_MS = 380L
         private const val LOGO_VIEWPORT_WIDTH = 65.890519f
 
-        // Offsets place the glyph centres of A, L and K on the centre of R in the wordmark viewport,
-        // so every letter starts where the logo begins and spreads out to its own position.
-        private const val LETTER_A_OFFSET = -20.6f
-        private const val LETTER_L_OFFSET = -34.0f
-        private const val LETTER_K_OFFSET = -47.3f
-        private const val LETTER_A_DELAY_MS = 80L
-        private const val LETTER_L_DELAY_MS = 150L
-        private const val LETTER_K_DELAY_MS = 220L
+        // Horizontal centres of the glyphs in the wordmark viewport. Every letter starts on the
+        // centre of the viewport, where the launch screen shows the R, and spreads out from there.
+        private const val LOGO_CENTRE_X = 32.9453f
+        private const val LETTER_R_CENTRE_X = 12.608f
+        private const val LETTER_A_CENTRE_X = 33.246f
+        private const val LETTER_L_CENTRE_X = 46.610f
+        private const val LETTER_K_CENTRE_X = 59.895f
+        private const val LETTER_A_DELAY_MS = 60L
+        private const val LETTER_L_DELAY_MS = 130L
+        private const val LETTER_K_DELAY_MS = 200L
     }
 }
