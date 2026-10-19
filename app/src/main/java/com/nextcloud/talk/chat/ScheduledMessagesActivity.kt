@@ -502,10 +502,12 @@ class ScheduledMessagesActivity : BaseActivity() {
                                 derivedStateOf { listState.firstVisibleItemIndex <= 2 }
                             }
 
+                            val context = LocalContext.current
+
                             val stickyDateHeaderText by remember(listState, keyToDate) {
                                 derivedStateOf {
                                     val firstKey = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key
-                                    firstKey?.let { keyToDate[it] }?.let { formatTime(it) } ?: ""
+                                    firstKey?.let { keyToDate[it] }?.let { formatTime(it, context) } ?: ""
                                 }
                             }
 

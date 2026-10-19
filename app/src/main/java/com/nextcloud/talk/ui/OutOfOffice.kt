@@ -7,13 +7,11 @@
 
 package com.nextcloud.talk.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -51,6 +49,7 @@ import coil.request.ImageRequest
 import coil.transform.CircleCropTransformation
 import com.nextcloud.talk.R
 import com.nextcloud.talk.models.json.userAbsence.UserAbsenceData
+import com.nextcloud.talk.ui.theme.BannerPanel
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.DisplayUtils
@@ -107,16 +106,12 @@ fun OutOfOfficeView(data: OutOfOfficeViewData, viewThemeUtils: ViewThemeUtils, o
         stringResource(R.string.user_absence, data.displayName)
     }
     val collapsedMessage = stringResource(R.string.user_absence_collapsed, data.displayName)
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(4.dp),
-        colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Row(modifier = Modifier.padding(start = 8.dp, end = 0.dp, bottom = 4.dp)) {
+    BannerPanel {
+        Row(modifier = Modifier.padding(start = 12.dp, end = 0.dp, bottom = 4.dp)) {
             Icon(
                 imageVector = Icons.Outlined.Bedtime,
                 contentDescription = null,
+                tint = colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(top = 10.dp)
                     .size(24.dp)
@@ -131,6 +126,7 @@ fun OutOfOfficeView(data: OutOfOfficeViewData, viewThemeUtils: ViewThemeUtils, o
                 Text(
                     text = if (isExpanded) shortMessage else collapsedMessage,
                     style = MaterialTheme.typography.bodyLarge,
+                    color = colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     maxLines = if (isExpanded) Int.MAX_VALUE else 1,
                     overflow = TextOverflow.Ellipsis

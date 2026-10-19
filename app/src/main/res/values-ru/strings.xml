@@ -625,7 +625,7 @@
     <string name="pin_indefinitely">Закрепить на неопределённый срок</string>
     <string name="pin_message">Закрепить сообщение</string>
     <string name="pinned">Закреплено</string>
-    <string name="pinned_by_author">%1$s (прикреплено %2$s)</string>
+    <string name="pinned_by_author">%1$s (закрепил(а) %2$s)</string>
     <string name="pinned_by_you">%1$s (закреплено вами)</string>
     <string name="pinned_dismiss">Скрыть</string>
     <string name="pinned_go_to_message">Перейти к сообщению</string>
@@ -781,7 +781,7 @@
     <string name="userinfo_no_info_text">На странице профиля укажите своё имя, добавьте изображение и подробные сведения</string>
     <string name="video_call">Видео</string>
     <string name="voice_room">Голосовой чат</string>
-    <string name="call_in_progress">Присоединиться к звонку</string>
+    <string name="call_in_progress">Идёт звонок</string>
     <string name="voice_room_preset">Присоединяйтесь к звонку напрямую, идеально подходит для встреч или спонтанных встреч</string>
     <string name="whats_your_status">Какой у вас статус?</string>
     <plurals name="nc_new_messages_count">

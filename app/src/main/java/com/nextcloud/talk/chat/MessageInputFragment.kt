@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.isVisible
+import androidx.core.view.updateLayoutParams
 import androidx.core.widget.doAfterTextChanged
 import androidx.emoji2.emojipicker.RecentEmojiProvider
 import androidx.emoji2.widget.EmojiTextView
@@ -1306,6 +1307,14 @@ class MessageInputFragment : Fragment() {
         val rectangular = appPreferences.messageInputRectangular
         binding.messageInputContainer.apply {
             viewThemeUtils.talk.themeMessageInputCard(this, rectangular)
+        }
+
+        // The call banner is edge to edge: attached to the input bar in the rectangular mode and
+        // floating a little above it while the input keeps its rounded, inset shape.
+        val callBannerGap = if (rectangular) 0 else resources.getDimensionPixelSize(R.dimen.standard_half_margin)
+        binding.fragmentCallStarted.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            topMargin = callBannerGap
+            bottomMargin = callBannerGap
         }
 
         binding.fragmentMessageInputView.findViewById<ImageView>(R.id.microphoneEnabledInfoBackground)?.let {

@@ -7,6 +7,7 @@
 
 package com.nextcloud.talk.ui.chat
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -15,12 +16,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,7 +32,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -63,7 +61,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.nextcloud.talk.R
 import com.nextcloud.talk.chat.ui.model.ChatMessageUi
 import com.nextcloud.talk.chat.ui.model.MessageStatusIcon
@@ -83,6 +80,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 private const val LONG_1000 = 1000L
 private const val LOAD_MORE_BUFFER_ITEMS = 5
@@ -128,7 +126,8 @@ fun ChatView(
     listState: LazyListState = rememberLazyListState()
 ) {
     val viewThemeUtils = LocalViewThemeUtils.current
-    val colorScheme = viewThemeUtils.getColorScheme(LocalContext.current)
+    val context = LocalContext.current
+    val colorScheme = viewThemeUtils.getColorScheme(context)
 
     val showUnreadPopup = remember { mutableStateOf(state.initialShowUnreadPopup) }
     val coroutineScope = rememberCoroutineScope()
@@ -340,8 +339,8 @@ fun ChatView(
             }
             targetItem?.let { itemInfo ->
                 state.chatItems.getOrNull(itemInfo.index)?.let { item ->
-                    item.dateOrNull()?.let { formatTime(it) }
-                        ?: item.messageOrNull()?.let { formatTime(it.timestamp * LONG_1000) }
+                    item.dateOrNull()?.let { formatTime(it, context) }
+                        ?: item.messageOrNull()?.let { formatTime(it.timestamp * LONG_1000, context) }
                 } ?: ""
             } ?: ""
         }
@@ -571,25 +570,19 @@ fun UnreadMessagesPopup(unreadCount: Int, onClick: () -> Unit, modifier: Modifie
 
 @Composable
 fun DateHeaderLabel(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurface
-    )
+    ChatPill(modifier = modifier) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
 }
 
 @Composable
 fun DateHeader(date: LocalDate) {
-    val text = when (date) {
-        LocalDate.now() -> stringResource(R.string.nc_date_header_today)
-        LocalDate.now().minusDays(1) -> stringResource(R.string.nc_date_header_yesterday)
-        else -> date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
-    }
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        DateHeaderLabel(text = text)
+        DateHeaderLabel(text = formatTime(date, LocalContext.current))
     }
 }
 
@@ -598,48 +591,36 @@ fun UnreadMessagesMarker() {
     val viewThemeUtils = LocalViewThemeUtils.current
     val colorScheme = viewThemeUtils.getColorScheme(LocalContext.current)
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            color = colorScheme.outlineVariant,
-            thickness = 1.dp
-        )
-
-        Text(
-            text = stringResource(R.string.nc_new_messages),
-            modifier = Modifier.padding(horizontal = 12.dp),
-            fontSize = 12.sp,
-            color = colorScheme.onSurfaceVariant
-        )
-
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            color = colorScheme.outlineVariant,
-            thickness = 1.dp
-        )
+        // Inverted accent: the chat itself uses the soft accent container, so the marker takes the
+        // strong one to stand out at the boundary of the unread messages.
+        ChatPill(containerColor = colorScheme.primary) {
+            Text(
+                text = stringResource(R.string.nc_new_messages),
+                style = MaterialTheme.typography.labelMedium,
+                color = colorScheme.onPrimary
+            )
+        }
     }
 }
 
-fun formatTime(timestampMillis: Long): String {
+fun formatTime(timestampMillis: Long, context: Context): String {
     val instant = Instant.ofEpochMilli(timestampMillis)
     val dateTime = instant.atZone(ZoneId.systemDefault()).toLocalDate()
-    return formatTime(dateTime)
+    return formatTime(dateTime, context)
 }
 
-fun formatTime(localDate: LocalDate): String {
-    val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
-    val text = when (localDate) {
-        LocalDate.now() -> "Today"
-        LocalDate.now().minusDays(1) -> "Yesterday"
-        else -> localDate.format(formatter)
+fun formatTime(localDate: LocalDate, context: Context): String =
+    when (localDate) {
+        LocalDate.now() -> context.getString(R.string.nc_date_header_today)
+        LocalDate.now().minusDays(1) -> context.getString(R.string.nc_date_header_yesterday)
+        else -> localDate.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
     }
-    return text
-}
 
 private suspend fun LazyListState.centerItemInViewportIfVisible(index: Int) {
     val targetItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return

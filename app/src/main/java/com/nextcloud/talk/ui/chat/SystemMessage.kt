@@ -8,11 +8,13 @@
 package com.nextcloud.talk.ui.chat
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +40,7 @@ import com.nextcloud.talk.chat.ui.model.ChatMessageUi
 import com.nextcloud.talk.utils.DateUtils
 
 private const val TIME_TEXT_SIZE = 12
+private const val SYSTEM_PILL_MAX_WIDTH_FRACTION = 0.78f
 
 private val systemMessageTextStyle
     @Composable get() = MaterialTheme.typography.bodyMedium
@@ -74,23 +77,25 @@ fun SystemMessage(message: ChatMessageUi) {
             } else {
                 textStyle.copy(lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified)
             }
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                highlightedAnnotated,
-                style = resolvedTextStyle,
-                color = colorScheme.onSurface,
-                inlineContent = inlineContent,
-                textAlign = TextAlign.Center,
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            ChatPill(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 64.dp, vertical = 4.dp)
-                    .align(Alignment.Center),
-                onTextLayout = { result ->
-                    if (!addLineBreaks.value && result.lineCount > 1) {
-                        addLineBreaks.value = true
+                    .align(Alignment.Center)
+                    .widthIn(max = maxWidth * SYSTEM_PILL_MAX_WIDTH_FRACTION)
+            ) {
+                Text(
+                    highlightedAnnotated,
+                    style = resolvedTextStyle,
+                    color = colorScheme.onSurface,
+                    inlineContent = inlineContent,
+                    textAlign = TextAlign.Center,
+                    onTextLayout = { result ->
+                        if (!addLineBreaks.value && result.lineCount > 1) {
+                            addLineBreaks.value = true
+                        }
                     }
-                }
-            )
+                )
+            }
             Text(
                 timeString,
                 fontSize = TIME_TEXT_SIZE.sp,

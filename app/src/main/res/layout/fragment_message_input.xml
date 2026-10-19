@@ -17,8 +17,6 @@
         android:id="@+id/fragment_call_started"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="@dimen/standard_half_margin"
-        android:layout_marginVertical="@dimen/standard_margin"
         android:visibility="gone"
         tools:visibility="visible" />
 

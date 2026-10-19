@@ -7,16 +7,11 @@
 
 package com.nextcloud.talk.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +30,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.nextcloud.talk.R
 import com.nextcloud.talk.models.json.upcomingEvents.UpcomingEvent
+import com.nextcloud.talk.ui.theme.BannerPanel
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
 import com.nextcloud.talk.utils.DateUtils
 import com.nextcloud.talk.utils.preview.ComposePreviewUtils
@@ -55,21 +51,15 @@ fun UpcomingEventView(event: UpcomingEvent, viewThemeUtils: ViewThemeUtils, onDi
         }
     }
 
-    Card(
-        modifier = Modifier
-            .padding(start = 4.dp, top = 4.dp, end = 4.dp)
-            .fillMaxWidth(),
-        shape = RoundedCornerShape(4.dp),
-        colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
+    BannerPanel {
         Row(
-            modifier = Modifier.padding(start = 8.dp, end = 0.dp),
+            modifier = Modifier.padding(start = 12.dp, end = 0.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = ImageVector.vectorResource(R.drawable.ic_event_24px),
                 contentDescription = null,
+                tint = colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.size(8.dp))
@@ -77,6 +67,7 @@ fun UpcomingEventView(event: UpcomingEvent, viewThemeUtils: ViewThemeUtils, onDi
                 Text(
                     text = timeString,
                     style = MaterialTheme.typography.bodyMedium,
+                    color = colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1
                 )
@@ -85,6 +76,7 @@ fun UpcomingEventView(event: UpcomingEvent, viewThemeUtils: ViewThemeUtils, onDi
             Text(
                 text = event.summary.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium,
+                color = colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

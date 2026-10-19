@@ -93,10 +93,7 @@
                     android:id="@+id/outOfOfficeComposeView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:visibility="gone"
-                    android:layout_marginStart="@dimen/standard_quarter_margin"
-                    android:layout_marginEnd="@dimen/standard_quarter_margin"
-                    android:layout_marginTop="@dimen/standard_quarter_margin" />
+                    android:visibility="gone" />
 
             </LinearLayout>
         </LinearLayout>
