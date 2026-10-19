@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
@@ -32,6 +31,10 @@ const val WAVEFORM_SIZE = 30
 const val MAX_HEIGHT = 100
 const val OVERLAP = 0.025
 const val PROGRESS = 0.97f
+
+// One thickness for every waveform bar and for the gaps between them, so the bars look the same on
+// every density. The previous Stroke.DefaultMiter value is a raw pixel width, which read as a hairline.
+private val waveformBarWidth = 3.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +45,6 @@ fun ComposeWaveformSeekBar(
     waveData: FloatArray,
     enabled: Boolean
 ) {
-    val barWidth = Stroke.DefaultMiter
     val thumbSize = WAVEFORM_THUMB_SIZE.dp
     val inversePrimary = MaterialTheme.colorScheme.inversePrimary
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
@@ -55,16 +57,18 @@ fun ComposeWaveformSeekBar(
             Box(
                 modifier = modifier
                     .drawWithCache {
+                        val barWidth = waveformBarWidth.toPx()
                         onDrawBehind {
                             val height = this.size.height
-                            val width = this.size.width + 8.dp.value
-                            val midpoint = (this.size.height / 2f)
+                            val width = this.size.width
+                            val midpoint = height / 2f
+                            val gaps = (waveData.size - 1).coerceAtLeast(1)
+                            val barGap = (width - waveData.size * barWidth) / gaps
 
-                            val barGap = (width - waveData.size * barWidth) / (waveData.size - 1).toFloat() + 1
                             for (i in waveData.indices) {
                                 val x: Float = i * (barWidth + barGap)
 
-                                if (x < 0f || x > size.width) continue
+                                if (x < 0f || x > width) continue
 
                                 val y: Float = (waveData[i] * height).coerceIn(0f, midpoint)
 
@@ -74,7 +78,7 @@ fun ComposeWaveformSeekBar(
                                     if (isXBeforeThumb) inversePrimary else onPrimaryContainer,
                                     start = Offset(x, midpoint - y),
                                     end = Offset(x, midpoint + y),
-                                    strokeWidth = Stroke.DefaultMiter,
+                                    strokeWidth = barWidth,
                                     cap = StrokeCap.Round
                                 )
                             }
