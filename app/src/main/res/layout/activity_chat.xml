@@ -65,24 +65,20 @@
             <androidx.compose.ui.platform.ComposeView
                 android:id="@+id/upcomingEventComposeView"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/standard_quarter_margin"
-                android:layout_marginEnd="@dimen/standard_quarter_margin"
-                android:layout_marginTop="@dimen/standard_quarter_margin" />
+                android:layout_height="wrap_content" />
 
             <LinearLayout
                 android:id="@+id/pinnedMessageContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="@dimen/standard_quarter_padding"
                 android:visibility="gone"
                 android:background="@color/transparent"
                 tools:visibility="visible">
 
                 <androidx.compose.ui.platform.ComposeView
                     android:id="@+id/pinnedMessageComposeView"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"/>
 
             </LinearLayout>

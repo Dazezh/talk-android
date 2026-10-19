@@ -41,7 +41,6 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -76,6 +75,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.transform.CircleCropTransformation
 import com.nextcloud.talk.R
+import com.nextcloud.talk.ui.theme.PanelDivider
 
 sealed class TopBarMode {
     data object SearchBarIdle : TopBarMode()
@@ -306,7 +306,7 @@ private fun TopBarSearchActiveContent(
                 color = MaterialTheme.colorScheme.primary
             )
         } else {
-            HorizontalDivider()
+            PanelDivider()
         }
     }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }

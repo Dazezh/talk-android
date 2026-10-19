@@ -8,7 +8,8 @@
 package com.nextcloud.talk.ui
 
 import android.text.format.DateFormat
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -55,6 +56,7 @@ import com.nextcloud.talk.models.json.conversations.ConversationEnums
 import com.nextcloud.talk.models.json.participants.Participant
 import com.nextcloud.talk.ui.chat.MarkdownText
 import com.nextcloud.talk.ui.theme.LocalViewThemeUtils
+import com.nextcloud.talk.ui.theme.PanelDivider
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
 import com.nextcloud.talk.utils.ConversationUtils
 import com.nextcloud.talk.utils.preview.ComposePreviewUtils
@@ -62,6 +64,10 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+private val pinnedIconSize = 20.dp
+private val pinnedPreviewMaxHeight = 48.dp
+
+@OptIn(ExperimentalFoundationApi::class)
 @Suppress("LongMethod", "LongParameterList")
 @Composable
 fun PinnedMessageView(
@@ -149,25 +155,29 @@ fun PinnedMessageView(
     }
 
     Card(
-        onClick = { scrollToMessageWithIdWithOffset(message.jsonMessageId.toString()) },
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(4.dp),
-        colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { scrollToMessageWithIdWithOffset(message.jsonMessageId.toString()) },
+                onLongClick = { expanded = true }
+            ),
+        shape = RectangleShape,
+        colors = CardDefaults.cardColors(containerColor = colorScheme.surface)
     ) {
-        Row(modifier = Modifier.padding(start = 8.dp, end = 0.dp)) {
+        PanelDivider()
+        Row(modifier = Modifier.padding(start = 12.dp, end = 0.dp)) {
             Icon(
                 imageVector = ImageVector.vectorResource(R.drawable.outline_push_pin_24),
                 contentDescription = null,
                 modifier = Modifier
-                    .padding(top = 12.dp)
-                    .size(24.dp)
+                    .padding(top = 10.dp)
+                    .size(pinnedIconSize)
             )
             Spacer(modifier = Modifier.size(8.dp))
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = 10.dp, bottom = 8.dp)
+                    .padding(top = 8.dp, bottom = 4.dp)
             ) {
                 Text(
                     text = pinnedHeadline,
@@ -180,52 +190,50 @@ fun PinnedMessageView(
                     message = messageUi,
                     textColor = colorScheme.onSurface,
                     modifier = Modifier
-                        .heightIn(max = 80.dp)
+                        .heightIn(max = pinnedPreviewMaxHeight)
                         .verticalScroll(scrollState),
                     onClick = { scrollToMessageWithIdWithOffset(message.jsonMessageId.toString()) }
                 )
             }
-            Column {
-                Box {
-                    IconButton(onClick = { expanded = true }) {
-                        Icon(
-                            imageVector = ImageVector.vectorResource(R.drawable.ic_more_vert_24px),
-                            contentDescription = stringResource(R.string.pinned_message_options)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(text = pinnedText, color = highEmphasisColor) },
-                            onClick = {},
-                            enabled = false
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.pinned_go_to_message), color = highEmphasisColor) },
-                            onClick = {
-                                expanded = false
-                                scrollToMessageWithIdWithOffset(message.jsonMessageId.toString())
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.pinned_dismiss), color = highEmphasisColor) },
-                            onClick = {
-                                expanded = false
-                                hidePinnedMessage(message)
-                            }
-                        )
-                        if (canPin) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.unpin_message), color = highEmphasisColor) },
-                                onClick = {
-                                    expanded = false
-                                    unPinMessage(message)
-                                }
-                            )
+            IconButton(onClick = { hidePinnedMessage(message) }) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_baseline_close_24),
+                    contentDescription = stringResource(R.string.pinned_dismiss)
+                )
+            }
+            Box {
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(text = pinnedText, color = highEmphasisColor) },
+                        onClick = {},
+                        enabled = false
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.pinned_go_to_message), color = highEmphasisColor) },
+                        onClick = {
+                            expanded = false
+                            scrollToMessageWithIdWithOffset(message.jsonMessageId.toString())
                         }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.pinned_dismiss), color = highEmphasisColor) },
+                        onClick = {
+                            expanded = false
+                            hidePinnedMessage(message)
+                        }
+                    )
+                    if (canPin) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.unpin_message), color = highEmphasisColor) },
+                            onClick = {
+                                expanded = false
+                                unPinMessage(message)
+                            }
+                        )
                     }
                 }
             }

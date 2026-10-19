@@ -56,7 +56,9 @@ fun UpcomingEventView(event: UpcomingEvent, viewThemeUtils: ViewThemeUtils, onDi
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .padding(start = 4.dp, top = 4.dp, end = 4.dp)
+            .fillMaxWidth(),
         shape = RoundedCornerShape(4.dp),
         colors = CardDefaults.cardColors(containerColor = colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)

@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import com.nextcloud.talk.R
@@ -56,6 +57,7 @@ fun StickerMessage(
         includePadding = false,
         forceTimeBelow = true,
         bubbleColor = Color.Transparent,
+        bubbleShape = RectangleShape,
         content = {
             StickerImage(
                 url = stickerUrl,

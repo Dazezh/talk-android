@@ -66,6 +66,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.platform.LocalContext
@@ -193,6 +194,7 @@ fun MessageScaffold(
     forceTimeBelow: Boolean = false,
     forceTimeOverlay: Boolean = false,
     bubbleColor: Color? = null,
+    bubbleShape: Shape? = null,
     contentWidthFraction: (availableWidth: Dp) -> Float = { 1f },
     content: @Composable () -> Unit
 ) {
@@ -241,10 +243,10 @@ fun MessageScaffold(
         showInlineMetadata = showInlineMetadata
     )
 
-    val shape = remember(incoming, uiMessage.isGrouped, uiMessage.isGroupedWithNext) {
+    val shape: Shape = remember(bubbleShape, incoming, uiMessage.isGrouped, uiMessage.isGroupedWithNext) {
         val groupedSideTop = if (uiMessage.isGrouped) bubbleRadiusSmall else bubbleRadiusBig
         val groupedSideBottom = if (uiMessage.isGroupedWithNext) bubbleRadiusSmall else bubbleRadiusBig
-        if (incoming) {
+        bubbleShape ?: if (incoming) {
             RoundedCornerShape(
                 topStart = groupedSideTop,
                 topEnd = bubbleRadiusBig,
@@ -345,7 +347,7 @@ private fun MessageBubbleWithReactions(
     isOneToOneConversation: Boolean,
     conversationThreadId: Long?,
     maxBubbleWidth: Dp,
-    shape: RoundedCornerShape,
+    shape: Shape,
     resolvedBubbleColor: Color,
     metadataLayoutMode: MetadataLayoutMode,
     captionText: String?,
