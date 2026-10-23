@@ -57,16 +57,17 @@ class ChatWallpaperRepository @Inject constructor(private val okHttpClient: OkHt
     private fun downloadWallpaper(user: User, path: String, target: File): Boolean {
         val credentials = ApiUtils.getCredentials(user.username, user.token)
         val baseUrl = user.baseUrl
-        if (credentials == null || baseUrl == null) {
+        val userId = user.userId
+        if (credentials == null || baseUrl == null || userId == null) {
             return false
         }
 
-        return runCatching { download(user, path, credentials, baseUrl, target) }.getOrDefault(false)
+        return runCatching { download(path, credentials, baseUrl, userId, target) }.getOrDefault(false)
     }
 
-    private fun download(user: User, path: String, credentials: String, baseUrl: String, target: File): Boolean {
+    private fun download(path: String, credentials: String, baseUrl: String, userId: String, target: File): Boolean {
         val request = Request.Builder()
-            .url(ApiUtils.getUrlForFileDownload(baseUrl, user.userId, path))
+            .url(ApiUtils.getUrlForFileDownload(baseUrl, userId, path))
             .header(AUTHORIZATION_HEADER, credentials)
             .build()
 
