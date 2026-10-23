@@ -79,6 +79,7 @@ import com.nextcloud.talk.jobs.ContactAddressBookWorker.Companion.deleteAll
 import com.nextcloud.talk.models.json.generic.GenericOverall
 import com.nextcloud.talk.models.json.userprofile.UserProfileOverall
 import com.nextcloud.talk.profile.ProfileActivity
+import com.nextcloud.talk.settings.chat.ChatSettingsActivity
 import com.nextcloud.talk.ui.dialog.SetPhoneNumberDialogFragment
 import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.ApiUtils
@@ -952,8 +953,7 @@ class SettingsActivity :
                 settingsPhoneBookIntegrationSwitch,
                 settingsReadPrivacySwitch,
                 settingsTypingStatusSwitch,
-                settingsProxyUseCredentialsSwitch,
-                settingsMessageInputRectangularSwitch
+                settingsProxyUseCredentialsSwitch
             ).forEach(viewThemeUtils.talk::colorSwitch)
         }
     }
@@ -1200,11 +1200,8 @@ class SettingsActivity :
         setupMediaQualitySetting()
         setupPhoneBookIntegrationSetting()
 
-        binding.settingsMessageInputRectangularSwitch.isChecked = appPreferences.messageInputRectangular
-        binding.settingsMessageInputRectangular.setOnClickListener {
-            val isChecked = binding.settingsMessageInputRectangularSwitch.isChecked
-            binding.settingsMessageInputRectangularSwitch.isChecked = !isChecked
-            appPreferences.setMessageInputRectangular(!isChecked)
+        binding.settingsChatSettings.setOnClickListener {
+            startActivity(Intent(this, ChatSettingsActivity::class.java))
         }
 
         binding.settingsScreenSecuritySwitch.isChecked = appPreferences.isScreenSecured

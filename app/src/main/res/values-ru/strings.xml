@@ -489,6 +489,10 @@
     <string name="nc_settings_account_updated">Вместо создания новой учётной записи было выполнено обновление существующей</string>
     <string name="nc_settings_advanced_title">Дополнительно</string>
     <string name="nc_settings_appearance">Внешний вид</string>
+    <string name="nc_settings_chat_settings_title">Настройки чата</string>
+    <string name="nc_settings_chat_settings_summary">Поле ввода, стикеры, обои, акцент</string>
+    <string name="nc_chat_settings_restart_hint">Изменение настроек внешнего вида приведёт к перезапуску приложения</string>
+    <string name="nc_chat_settings_input_section">Поле ввода</string>
     <string name="nc_settings_call_ringtone">Вызовы</string>
     <string name="nc_settings_contact_admin_of">Свяжитесь с администратором </string>
     <string name="nc_settings_diagnosis_title">Диагностика</string>

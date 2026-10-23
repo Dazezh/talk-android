@@ -263,6 +263,12 @@
             android:theme="@style/AppTheme" />
 
         <activity
+            android:name=".settings.chat.ChatSettingsActivity"
+            android:label="@string/nc_settings_chat_settings_title"
+            android:parentActivityName=".settings.SettingsActivity"
+            android:theme="@style/AppTheme" />
+
+        <activity
             android:name=".diagnosis.DiagnosisActivity"
             android:theme="@style/AppTheme" />
 

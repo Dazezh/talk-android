@@ -189,26 +189,39 @@
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <LinearLayout
-                    android:id="@+id/settings_message_input_rectangular"
+                    android:id="@+id/settings_chat_settings"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="?android:attr/selectableItemBackground"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:padding="@dimen/standard_padding">
 
-                    <com.google.android.material.textview.MaterialTextView
+                    <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="@string/nc_settings_message_input_rectangular_title"
-                        android:textSize="@dimen/headline_text_size" />
+                        android:orientation="vertical">
 
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/settings_message_input_rectangular_switch"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:clickable="false"
-                        android:gravity="center_vertical" />
+                        <com.google.android.material.textview.MaterialTextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/nc_settings_chat_settings_title"
+                            android:textSize="@dimen/headline_text_size" />
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/nc_settings_chat_settings_summary" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.AppCompatImageView
+                        android:layout_width="@dimen/min_size_clickable_area"
+                        android:layout_height="@dimen/min_size_clickable_area"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:padding="@dimen/standard_half_padding"
+                        android:src="@drawable/ic_chevron_right" />
                 </LinearLayout>
 
                 <LinearLayout
