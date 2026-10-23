@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.logger.Logger
 import com.nextcloud.talk.stickers.data.StickerRepository
+import com.nextcloud.talk.stickers.data.StickerUsageRepository
 import com.nextcloud.talk.stickers.data.model.Sticker
 import com.nextcloud.talk.stickers.data.model.StickerLibrary
 import com.nextcloud.talk.stickers.data.model.StickerPack
@@ -30,17 +31,21 @@ import javax.inject.Inject
  * the server is only asked for a revision when the picker is opened, when the capabilities were checked or
  * when a pack is opened for the first time.
  */
-class StickersViewModel @Inject constructor(private val repository: StickerRepository, private val logger: Logger) :
-    ViewModel() {
+class StickersViewModel @Inject constructor(
+    private val repository: StickerRepository,
+    private val usageRepository: StickerUsageRepository,
+    private val logger: Logger
+) : ViewModel() {
 
     data class StickerPickerState(
-        val packs: List<StickerPack> = emptyList(),
-        val selectedTab: Int = TAB_EMOJI,
+        val tabs: List<StickerTab> = listOf(StickerTab.Emoji),
+        val selectedTab: StickerTab = StickerTab.Emoji,
         val stickers: List<Sticker> = emptyList(),
         val nextCursor: Int? = null,
         val isLoadingStickers: Boolean = false,
         val credentials: String = "",
-        val isCachingInProgress: Boolean = false
+        val isCachingInProgress: Boolean = false,
+        val favoriteIds: Set<String> = emptySet()
     )
 
     private val _state = MutableStateFlow(StickerPickerState())
@@ -55,6 +60,9 @@ class StickersViewModel @Inject constructor(private val repository: StickerRepos
     private var initialized = false
     private var lastRevisionCheckAt = 0L
     private var packJob: Job? = null
+    private var packs: List<StickerPack> = emptyList()
+    private var favorites: List<Sticker> = emptyList()
+    private var recent: List<Sticker> = emptyList()
 
     fun initialize(user: User) {
         if (initialized) {
@@ -66,12 +74,15 @@ class StickersViewModel @Inject constructor(private val repository: StickerRepos
         revision = null
         _state.value = StickerPickerState(credentials = user.getCredentials())
         viewModelScope.launch {
+            favorites = usageRepository.favorites(user)
+            recent = usageRepository.recent(user)
+            refreshTabs()
             val cachedLibrary = repository.getCachedLibrary(user)
             if (cachedLibrary == null) {
                 // the very first request fills the cache and can take a while, so the wait is reported
                 _state.update { it.copy(isCachingInProgress = true) }
             } else {
-                applyLibrary(cachedLibrary)
+                applyLibrary(user, cachedLibrary)
             }
             checkForUpdates(force = false)
         }
@@ -91,7 +102,7 @@ class StickersViewModel @Inject constructor(private val repository: StickerRepos
         lastRevisionCheckAt = System.currentTimeMillis()
         _state.update { it.copy(isCachingInProgress = true) }
         viewModelScope.launch {
-            repository.refreshLibrary(currentUser, force = true)?.let { library -> applyLibrary(library) }
+            repository.refreshLibrary(currentUser, force = true)?.let { library -> applyLibrary(currentUser, library) }
         }
     }
 
@@ -103,12 +114,34 @@ class StickersViewModel @Inject constructor(private val repository: StickerRepos
         checkForUpdates(force = true)
     }
 
-    fun selectTab(index: Int) {
+    fun selectTab(tab: StickerTab) {
         val current = _state.value
-        if (index == current.selectedTab && current.stickers.isNotEmpty()) return
+        if (tab == current.selectedTab && current.stickers.isNotEmpty()) return
 
-        _state.update { it.copy(selectedTab = index, stickers = emptyList(), nextCursor = null) }
-        currentPackName()?.let { loadPack(it) }
+        packJob?.cancel()
+        if (tab is StickerTab.Pack) {
+            loadPack(tab.name)
+        } else {
+            emitLocalTab(tab)
+        }
+    }
+
+    /** Adds [sticker] to the favorites or removes it again, whichever [favorite] asks for. */
+    fun setFavorite(sticker: Sticker, favorite: Boolean) {
+        val currentUser = user ?: return
+        viewModelScope.launch {
+            favorites = usageRepository.setFavorite(currentUser, sticker, favorite)
+            refreshTabs()
+        }
+    }
+
+    /** Remembers [sticker] as just sent, so it shows up in the recently sent stickers. */
+    fun onStickerSent(sticker: Sticker) {
+        val currentUser = user ?: return
+        viewModelScope.launch {
+            recent = usageRepository.rememberSent(currentUser, sticker)
+            refreshTabs()
+        }
     }
 
     fun loadMore() {
@@ -143,11 +176,37 @@ class StickersViewModel @Inject constructor(private val repository: StickerRepos
         lastRevisionCheckAt = now
 
         viewModelScope.launch {
-            repository.refreshLibrary(currentUser)?.let { library -> applyLibrary(library) }
+            repository.refreshLibrary(currentUser)?.let { library -> applyLibrary(currentUser, library) }
         }
     }
 
-    private suspend fun applyLibrary(library: StickerLibrary) {
+    /** Rebuilds the tab strip and refreshes the stickers of the favorites and recent tab. */
+    private fun refreshTabs() {
+        val current = _state.value
+        val tabs = StickerTab.of(packs, favorites.isNotEmpty(), recent.isNotEmpty())
+        val selected = if (current.selectedTab in tabs) current.selectedTab else StickerTab.Emoji
+        _state.update {
+            it.copy(tabs = tabs, favoriteIds = favorites.mapTo(mutableSetOf()) { sticker -> sticker.id })
+        }
+        if (selected is StickerTab.Pack) {
+            if (selected != current.selectedTab) loadPack(selected.name)
+        } else {
+            emitLocalTab(selected)
+        }
+    }
+
+    private fun emitLocalTab(tab: StickerTab) {
+        val stickers = when (tab) {
+            StickerTab.Favorites -> favorites
+            StickerTab.Recent -> recent
+            else -> emptyList()
+        }
+        _state.update {
+            it.copy(selectedTab = tab, stickers = stickers, nextCursor = null, isLoadingStickers = false)
+        }
+    }
+
+    private suspend fun applyLibrary(currentUser: User, library: StickerLibrary) {
         val previousRevision = revision
         val revisionChanged = library.revision != previousRevision
         if (library.packs.isEmpty()) {
@@ -156,53 +215,70 @@ class StickersViewModel @Inject constructor(private val repository: StickerRepos
             logger.d(TAG, "Sticker library applied: ${library.packs.size} packs at revision ${library.revision}")
         }
         revision = library.revision
+        packs = library.packs
+        if (!library.fromCache) {
+            // a fetched pack list is authoritative, so stored stickers of vanishing packs are dropped
+            usageRepository.prunePacks(currentUser, packs.mapTo(mutableSetOf()) { it.name })
+            favorites = usageRepository.favorites(currentUser)
+            recent = usageRepository.recent(currentUser)
+        }
         // a successful request ends the caching wait, a failed one leaves the dialog to the user
-        _state.update { it.copy(packs = library.packs, isCachingInProgress = false) }
+        _state.update { it.copy(isCachingInProgress = false) }
         // servers without a revision route cannot tell whether the packs changed, so every fetched list counts
         if (!library.fromCache && (revisionChanged || library.revision == null)) {
             _libraryCached.emit(Unit)
         }
+        refreshTabs()
 
-        val openPack = currentPackName() ?: return
-        if (library.packs.none { it.name == openPack }) {
-            _state.update { it.copy(selectedTab = TAB_EMOJI, stickers = emptyList(), nextCursor = null) }
-        } else if (revisionChanged) {
+        val openPack = currentPackName()
+        if (openPack != null && revisionChanged && packs.any { it.name == openPack }) {
             loadPack(openPack)
         }
     }
 
     private fun loadPack(packName: String) {
         val currentUser = user ?: return
+        val pack = packs.firstOrNull { it.name == packName } ?: return
         packJob?.cancel()
         packJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    selectedTab = StickerTab.Pack(pack.name, pack.displayName),
+                    stickers = emptyList(),
+                    nextCursor = null
+                )
+            }
             val cached = repository.getCachedPage(currentUser, packName, revision)
             if (cached != null) {
-                emitPackPage(cached.stickers, cached.nextCursor)
+                _state.update {
+                    it.copy(stickers = cached.stickers, nextCursor = cached.nextCursor, isLoadingStickers = false)
+                }
                 return@launch
             }
 
-            _state.update { it.copy(isLoadingStickers = true, stickers = emptyList(), nextCursor = null) }
+            _state.update { it.copy(isLoadingStickers = true) }
             val page = repository.fetchPage(currentUser, packName, CURSOR_FIRST_PAGE, revision)
             if (page == null) {
                 _state.update { it.copy(isLoadingStickers = false) }
             } else {
-                emitPackPage(page.stickers, page.nextCursor)
+                _state.update {
+                    it.copy(stickers = page.stickers, nextCursor = page.nextCursor, isLoadingStickers = false)
+                }
+                if (page.nextCursor == null) {
+                    // the whole pack is known, so stored stickers that are gone can be dropped
+                    usageRepository.prunePack(currentUser, packName, page.stickers.mapTo(mutableSetOf()) { it.id })
+                    favorites = usageRepository.favorites(currentUser)
+                    recent = usageRepository.recent(currentUser)
+                    refreshTabs()
+                }
             }
         }
     }
 
-    private fun emitPackPage(stickers: List<Sticker>, nextCursor: Int?) {
-        _state.update { it.copy(stickers = stickers, nextCursor = nextCursor, isLoadingStickers = false) }
-    }
-
-    private fun currentPackName(): String? {
-        val current = _state.value
-        return current.packs.getOrNull(current.selectedTab - 1)?.name
-    }
+    private fun currentPackName(): String? = (_state.value.selectedTab as? StickerTab.Pack)?.name
 
     companion object {
         private val TAG = StickersViewModel::class.java.simpleName
-        const val TAB_EMOJI = 0
         private const val CURSOR_FIRST_PAGE = 0
         private const val REVISION_CHECK_THROTTLE_MS = 30L * 1000
     }

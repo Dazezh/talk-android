@@ -82,8 +82,8 @@ import com.nextcloud.talk.stickers.ui.LocalStickerImageLoader
 import com.nextcloud.talk.stickers.ui.StickerCacheDialog
 import com.nextcloud.talk.stickers.ui.StickerPickerGrid
 import com.nextcloud.talk.stickers.ui.StickerPickerTabs
+import com.nextcloud.talk.stickers.viewmodels.StickerTab
 import com.nextcloud.talk.stickers.viewmodels.StickersViewModel
-import com.nextcloud.talk.stickers.viewmodels.StickersViewModel.Companion.TAB_EMOJI
 import com.nextcloud.talk.ui.CallStartedBanner
 import com.nextcloud.talk.ui.MicInputCloud
 import com.nextcloud.talk.ui.dialog.AttachmentDialog
@@ -937,7 +937,7 @@ class MessageInputFragment : Fragment() {
             if (stickersInitialized) {
                 // the server lost the sticker capability while the picker was open
                 binding.stickerPickerTabs.isVisible = false
-                stickersViewModel.selectTab(TAB_EMOJI)
+                stickersViewModel.selectTab(StickerTab.Emoji)
             }
             return
         }
@@ -956,7 +956,7 @@ class MessageInputFragment : Fragment() {
             val state by stickersViewModel.state.collectAsStateWithLifecycle()
             MaterialTheme(colorScheme = viewThemeUtils.getColorScheme(requireContext())) {
                 StickerPickerTabs(
-                    packs = state.packs,
+                    tabs = state.tabs,
                     selectedTab = state.selectedTab,
                     onTabSelected = { stickersViewModel.selectTab(it) }
                 )
@@ -973,8 +973,12 @@ class MessageInputFragment : Fragment() {
                         state = state,
                         onLoadMore = { stickersViewModel.loadMore() },
                         onStickerClick = { sticker ->
+                            stickersViewModel.onStickerSent(sticker)
                             sendMessage(sticker.resourceUrl, false)
                             chatActivity.requestScrollToNewestMessage()
+                        },
+                        onFavoriteToggle = { sticker, favorite ->
+                            stickersViewModel.setFavorite(sticker, favorite)
                         }
                     )
                 }
@@ -993,8 +997,8 @@ class MessageInputFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 stickersViewModel.state.collect { state ->
-                    binding.emojiPicker.isVisible = state.selectedTab == TAB_EMOJI
-                    binding.stickerPickerGrid.isVisible = state.selectedTab != TAB_EMOJI
+                    binding.emojiPicker.isVisible = state.selectedTab == StickerTab.Emoji
+                    binding.stickerPickerGrid.isVisible = state.selectedTab != StickerTab.Emoji
                 }
             }
         }

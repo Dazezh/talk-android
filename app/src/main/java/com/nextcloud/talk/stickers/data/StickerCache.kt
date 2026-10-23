@@ -11,6 +11,7 @@ import com.nextcloud.talk.arbitrarystorage.ArbitraryStorageManager
 import com.nextcloud.talk.logger.Logger
 import com.nextcloud.talk.models.json.stickers.StickerLibraryCacheJson
 import com.nextcloud.talk.models.json.stickers.StickerPackCacheJson
+import com.nextcloud.talk.models.json.stickers.StickerUsageCacheJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -37,6 +38,20 @@ class StickerCache @Inject constructor(
 
     suspend fun storePackPage(accountId: Long, packName: String, page: StickerPackCacheJson) {
         write(accountId, KEY_PACK_PAGE, packName, page)
+    }
+
+    suspend fun getFavorites(accountId: Long): StickerUsageCacheJson? =
+        read(accountId, KEY_FAVORITES, USAGE_STORAGE_OBJECT, StickerUsageCacheJson::class.java)
+
+    suspend fun storeFavorites(accountId: Long, favorites: StickerUsageCacheJson) {
+        write(accountId, KEY_FAVORITES, USAGE_STORAGE_OBJECT, favorites)
+    }
+
+    suspend fun getRecent(accountId: Long): StickerUsageCacheJson? =
+        read(accountId, KEY_RECENT, USAGE_STORAGE_OBJECT, StickerUsageCacheJson::class.java)
+
+    suspend fun storeRecent(accountId: Long, recent: StickerUsageCacheJson) {
+        write(accountId, KEY_RECENT, USAGE_STORAGE_OBJECT, recent)
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -79,8 +94,11 @@ class StickerCache @Inject constructor(
         private val TAG = StickerCache::class.java.simpleName
         private const val KEY_LIBRARY = "r_stiker_library"
         private const val KEY_PACK_PAGE = "r_stiker_pack_page"
+        private const val KEY_FAVORITES = "r_stiker_favorites"
+        private const val KEY_RECENT = "r_stiker_recent"
 
         // the arbitrary storage key consists of key plus object, so the library needs a fixed object
         private const val LIBRARY_STORAGE_OBJECT = ""
+        private const val USAGE_STORAGE_OBJECT = ""
     }
 }

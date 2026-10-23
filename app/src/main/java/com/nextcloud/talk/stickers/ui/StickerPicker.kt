@@ -6,13 +6,17 @@
  */
 package com.nextcloud.talk.stickers.ui
 
-import androidx.compose.foundation.clickable
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -20,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,11 +32,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.dimensionResource
@@ -41,8 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nextcloud.talk.R
 import com.nextcloud.talk.stickers.data.model.Sticker
-import com.nextcloud.talk.stickers.data.model.StickerPack
-import com.nextcloud.talk.stickers.viewmodels.StickersViewModel.Companion.TAB_EMOJI
+import com.nextcloud.talk.stickers.viewmodels.StickerTab
 import com.nextcloud.talk.stickers.viewmodels.StickersViewModel.StickerPickerState
 
 private const val LOAD_MORE_THRESHOLD = 8
@@ -51,62 +58,70 @@ private val stickerCellMinSize = 64.dp
 private val packTabMaxWidth = 140.dp
 
 /**
- * Horizontal tab strip of the picker: emoji first, then one tab per sticker pack, following the layout
- * Telegram uses for its sticker packs.
+ * Horizontal tab strip of the picker: emoji first, then the favorites and the recently sent stickers as long
+ * as they have entries, followed by one tab per sticker pack.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StickerPickerTabs(
-    packs: List<StickerPack>,
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
+    tabs: List<StickerTab>,
+    selectedTab: StickerTab,
+    onTabSelected: (StickerTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
     PrimaryScrollableTabRow(
-        selectedTabIndex = selectedTab.coerceIn(0, packs.size),
+        selectedTabIndex = tabs.indexOf(selectedTab).coerceIn(0, tabs.lastIndex.coerceAtLeast(0)),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         edgePadding = 0.dp,
         modifier = modifier
     ) {
-        Tab(
-            selected = selectedTab == TAB_EMOJI,
-            onClick = { onTabSelected(TAB_EMOJI) },
-            text = {
-                Icon(
-                    painter = painterResource(R.drawable.ic_insert_emoticon_black_24dp),
-                    contentDescription = stringResource(R.string.nc_add_emojis),
-                    modifier = Modifier.size(tabIconSize)
-                )
-            }
-        )
-        packs.forEachIndexed { index, pack ->
+        tabs.forEach { tab ->
             Tab(
-                selected = selectedTab == index + 1,
-                onClick = { onTabSelected(index + 1) },
-                text = {
-                    Text(
-                        text = pack.displayName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = packTabMaxWidth)
-                    )
-                }
+                selected = tab == selectedTab,
+                onClick = { onTabSelected(tab) },
+                text = { StickerTabLabel(tab) }
             )
         }
     }
 }
 
+@Composable
+private fun StickerTabLabel(tab: StickerTab) {
+    when (tab) {
+        StickerTab.Emoji -> StickerTabIcon(R.drawable.ic_insert_emoticon_black_24dp, R.string.nc_add_emojis)
+        StickerTab.Favorites -> StickerTabIcon(R.drawable.ic_star_black_24dp, R.string.nc_stickers_favorites)
+        StickerTab.Recent -> StickerTabIcon(R.drawable.outline_access_time_24, R.string.nc_stickers_recent)
+        is StickerTab.Pack -> Text(
+            text = tab.displayName,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = packTabMaxWidth)
+        )
+    }
+}
+
+@Composable
+private fun StickerTabIcon(@DrawableRes iconRes: Int, @StringRes contentDescriptionRes: Int) {
+    Icon(
+        painter = painterResource(iconRes),
+        contentDescription = stringResource(contentDescriptionRes),
+        modifier = Modifier.size(tabIconSize)
+    )
+}
+
 /**
- * Lazily loaded sticker grid of the selected pack. Stickers are drawn without a background so their
- * transparency is kept.
+ * Lazily loaded sticker grid of the selected tab. Stickers are drawn without a background so their
+ * transparency is kept. A long press offers to add the sticker to the favorites or to remove it from them.
  */
 @Composable
 fun StickerPickerGrid(
     state: StickerPickerState,
     onLoadMore: () -> Unit,
     onStickerClick: (Sticker) -> Unit,
+    onFavoriteToggle: (Sticker, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var favoriteDialogSticker by remember { mutableStateOf<Sticker?>(null) }
     val gridState = rememberLazyGridState()
     val shouldLoadMore by remember {
         derivedStateOf {
@@ -129,7 +144,7 @@ fun StickerPickerGrid(
             modifier = Modifier.fillMaxSize()
         ) {
             items(state.stickers, key = { it.id }) { sticker ->
-                StickerCell(sticker, state.credentials, onStickerClick)
+                StickerCell(sticker, state.credentials, onStickerClick) { favoriteDialogSticker = sticker }
             }
         }
 
@@ -137,15 +152,37 @@ fun StickerPickerGrid(
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
     }
+
+    favoriteDialogSticker?.let { sticker ->
+        StickerFavoriteDialog(
+            sticker = sticker,
+            isFavorite = sticker.id in state.favoriteIds,
+            credentials = state.credentials,
+            onConfirm = {
+                onFavoriteToggle(sticker, sticker.id !in state.favoriteIds)
+                favoriteDialogSticker = null
+            },
+            onDismiss = { favoriteDialogSticker = null }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StickerCell(sticker: Sticker, credentials: String, onStickerClick: (Sticker) -> Unit) {
+private fun StickerCell(
+    sticker: Sticker,
+    credentials: String,
+    onStickerClick: (Sticker) -> Unit,
+    onStickerLongClick: (Sticker) -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clickable { onStickerClick(sticker) },
+            .combinedClickable(
+                onClick = { onStickerClick(sticker) },
+                onLongClick = { onStickerLongClick(sticker) }
+            ),
         contentAlignment = Alignment.Center
     ) {
         StickerImage(
@@ -157,4 +194,35 @@ private fun StickerCell(sticker: Sticker, credentials: String, onStickerClick: (
                 .padding(dimensionResource(R.dimen.standard_quarter_margin))
         )
     }
+}
+
+@Composable
+private fun StickerFavoriteDialog(
+    sticker: Sticker,
+    isFavorite: Boolean,
+    credentials: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val actionRes = if (isFavorite) R.string.nc_sticker_remove_favorite else R.string.nc_sticker_add_favorite
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = sticker.title) },
+        text = {
+            StickerImage(
+                url = sticker.thumbnailUrl,
+                authHeader = credentials,
+                contentDescription = sticker.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(dimensionResource(R.dimen.sticker_message_size))
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(text = stringResource(actionRes)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(text = stringResource(R.string.nc_cancel)) }
+        }
+    )
 }

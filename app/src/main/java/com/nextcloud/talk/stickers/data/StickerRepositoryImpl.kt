@@ -40,7 +40,7 @@ class StickerRepositoryImpl(
     override suspend fun getCachedPage(user: User, packName: String, revision: String?): StickerPage? {
         val accountId = accountId(user) ?: return null
         val cached = cache.getPackPage(accountId, packName)
-        return cached?.takeIf { it.revision == revision }?.page?.toDomainModel()
+        return cached?.takeIf { it.revision == revision }?.page?.toDomainModel(packName)
     }
 
     override suspend fun refreshLibrary(user: User, force: Boolean): StickerLibrary? {
@@ -58,7 +58,7 @@ class StickerRepositoryImpl(
                 cache.storePackPage(id, packName, StickerPackCacheJson(revision, currentTime(), page))
             }
         }
-        return page.toDomainModel()
+        return page.toDomainModel(packName)
     }
 
     /**
@@ -147,14 +147,14 @@ class StickerRepositoryImpl(
         return StickerPack(packName, displayName ?: packName, description, stickerCount)
     }
 
-    private fun StickerListJson.toDomainModel(): StickerPage =
-        StickerPage(entries.orEmpty().mapNotNull { it.toDomainModel() }, cursor, total)
+    private fun StickerListJson.toDomainModel(pack: String? = null): StickerPage =
+        StickerPage(entries.orEmpty().mapNotNull { it.toDomainModel(pack) }, cursor, total)
 
-    private fun StickerJson.toDomainModel(): Sticker? {
+    private fun StickerJson.toDomainModel(pack: String? = null): Sticker? {
         val stickerId = id
         val resource = resourceUrl
         if (stickerId == null || resource == null) return null
-        return Sticker(stickerId, title ?: name ?: stickerId, thumbnailUrl ?: resource, resource)
+        return Sticker(stickerId, title ?: name ?: stickerId, thumbnailUrl ?: resource, resource, pack)
     }
 
     companion object {

@@ -6,4 +6,10 @@
  */
 package com.nextcloud.talk.stickers.data.model
 
-data class Sticker(val id: String, val title: String, val thumbnailUrl: String, val resourceUrl: String)
+data class Sticker(
+    val id: String,
+    val title: String,
+    val thumbnailUrl: String,
+    val resourceUrl: String,
+    val pack: String? = null
+)
