@@ -28,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,10 +44,35 @@ import com.nextcloud.talk.R
 import com.nextcloud.talk.activities.BaseActivity
 import com.nextcloud.talk.activities.MainActivity
 import com.nextcloud.talk.application.NextcloudTalkApplication
+import com.nextcloud.talk.chat.wallpaper.ChatWallpaper
+import com.nextcloud.talk.chat.wallpaper.ChatWallpaperRepository
 import com.nextcloud.talk.components.ColoredStatusBar
 import com.nextcloud.talk.components.StandardAppBar
+import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.preferences.RalkAppearancePreferences
 import com.nextcloud.talk.utils.preferences.StickerSize
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+private data class ChatSettingsUiState(
+    val rectangularInput: Boolean,
+    val stickerSize: StickerSize,
+    val accentSeed: Int,
+    val wallpaper: ChatWallpaper?,
+    val wallpaperOptions: List<ChatWallpaper>? = null,
+    val isWallpaperLoading: Boolean = false
+) {
+    val isWallpaperPickerVisible: Boolean get() = wallpaperOptions != null || isWallpaperLoading
+}
+
+private data class ChatSettingsCallbacks(
+    val onRectangularInputChange: (Boolean) -> Unit,
+    val onStickerSizeChange: (StickerSize) -> Unit,
+    val onAccentSelected: (Int) -> Unit,
+    val onLoadWallpapers: () -> Unit,
+    val onWallpaperSelected: (ChatWallpaper?) -> Unit,
+    val onWallpaperPickerDismissed: () -> Unit
+)
 
 /**
  * Appearance settings that only affect the chat: the shape of the input field, the size of the
@@ -55,14 +81,25 @@ import com.nextcloud.talk.utils.preferences.StickerSize
 @AutoInjector(NextcloudTalkApplication::class)
 class ChatSettingsActivity : BaseActivity() {
 
+    @Inject
+    lateinit var chatWallpaperRepository: ChatWallpaperRepository
+
+    @Inject
+    lateinit var userManager: UserManager
+
+    private var wallpaperOptions by mutableStateOf<List<ChatWallpaper>?>(null)
+    private var isWallpaperLoading by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NextcloudTalkApplication.sharedApplication!!.componentApplication.inject(this)
 
         val colorScheme = viewThemeUtils.getColorScheme(this)
-        val appearancePreferences = RalkAppearancePreferences(this)
 
         setContent {
+            val appearancePreferences = remember { RalkAppearancePreferences(this) }
+            val wallpaperPath = appearancePreferences.wallpaperPath
+
             MaterialTheme(colorScheme = colorScheme) {
                 ColoredStatusBar()
                 Scaffold(
@@ -76,18 +113,33 @@ class ChatSettingsActivity : BaseActivity() {
                     }
                 ) { paddingValues ->
                     ChatSettingsScreen(
-                        initialRectangularInput = appPreferences.messageInputRectangular,
-                        onRectangularInputChange = { appPreferences.setMessageInputRectangular(it) },
-                        initialStickerSize = appearancePreferences.stickerSize,
-                        onStickerSizeChange = { appearancePreferences.stickerSize = it },
-                        selectedAccent = appearancePreferences.accentSeedOrDefault(this),
-                        onAccentSelected = ::applyAccent,
+                        state = ChatSettingsUiState(
+                            rectangularInput = appPreferences.messageInputRectangular,
+                            stickerSize = appearancePreferences.stickerSize,
+                            accentSeed = appearancePreferences.accentSeedOrDefault(this),
+                            wallpaper = wallpaperPath?.let { path ->
+                                ChatWallpaper(path = path, name = path.substringAfterLast('/'))
+                            },
+                            wallpaperOptions = wallpaperOptions,
+                            isWallpaperLoading = isWallpaperLoading
+                        ),
+                        callbacks = buildCallbacks(appearancePreferences),
                         modifier = Modifier.padding(paddingValues)
                     )
                 }
             }
         }
     }
+
+    private fun buildCallbacks(appearancePreferences: RalkAppearancePreferences): ChatSettingsCallbacks =
+        ChatSettingsCallbacks(
+            onRectangularInputChange = { appPreferences.setMessageInputRectangular(it) },
+            onStickerSizeChange = { appearancePreferences.stickerSize = it },
+            onAccentSelected = ::applyAccent,
+            onLoadWallpapers = ::loadWallpapers,
+            onWallpaperSelected = ::applyWallpaper,
+            onWallpaperPickerDismissed = { wallpaperOptions = null }
+        )
 
     private fun applyAccent(seed: Int) {
         val appearancePreferences = RalkAppearancePreferences(this)
@@ -97,6 +149,30 @@ class ChatSettingsActivity : BaseActivity() {
 
         appearancePreferences.accentSeed = seed
         restartApp()
+    }
+
+    private fun loadWallpapers() {
+        val user = userManager.currentUser.blockingGet() ?: return
+        isWallpaperLoading = true
+        lifecycleScope.launch {
+            wallpaperOptions = chatWallpaperRepository.listWallpapers(user)
+            isWallpaperLoading = false
+        }
+    }
+
+    private fun applyWallpaper(wallpaper: ChatWallpaper?) {
+        wallpaperOptions = null
+        val appearancePreferences = RalkAppearancePreferences(this)
+        if (wallpaper == null) {
+            appearancePreferences.clearWallpaper()
+            return
+        }
+
+        appearancePreferences.wallpaperPath = wallpaper.path
+        val user = userManager.currentUser.blockingGet() ?: return
+        lifecycleScope.launch {
+            chatWallpaperRepository.wallpaperFile(this@ChatSettingsActivity, user, wallpaper.path)
+        }
     }
 
     /**
@@ -114,16 +190,12 @@ class ChatSettingsActivity : BaseActivity() {
 
 @Composable
 private fun ChatSettingsScreen(
-    initialRectangularInput: Boolean,
-    onRectangularInputChange: (Boolean) -> Unit,
-    initialStickerSize: StickerSize,
-    onStickerSizeChange: (StickerSize) -> Unit,
-    selectedAccent: Int,
-    onAccentSelected: (Int) -> Unit,
+    state: ChatSettingsUiState,
+    callbacks: ChatSettingsCallbacks,
     modifier: Modifier = Modifier
 ) {
-    var rectangularInput by remember(initialRectangularInput) { mutableStateOf(initialRectangularInput) }
-    var stickerSize by remember(initialStickerSize) { mutableStateOf(initialStickerSize) }
+    var rectangularInput by remember(state.rectangularInput) { mutableStateOf(state.rectangularInput) }
+    var stickerSize by remember(state.stickerSize) { mutableStateOf(state.stickerSize) }
 
     Column(
         modifier = modifier
@@ -144,7 +216,7 @@ private fun ChatSettingsScreen(
             checked = rectangularInput,
             onCheckedChange = {
                 rectangularInput = it
-                onRectangularInputChange(it)
+                callbacks.onRectangularInputChange(it)
             }
         )
 
@@ -154,13 +226,60 @@ private fun ChatSettingsScreen(
             selected = stickerSize,
             onSelect = {
                 stickerSize = it
-                onStickerSizeChange(it)
+                callbacks.onStickerSizeChange(it)
             }
+        )
+
+        SectionTitle(text = stringResource(R.string.nc_chat_settings_wallpaper_section))
+
+        WallpaperRow(
+            wallpaperName = state.wallpaper?.name,
+            onPick = callbacks.onLoadWallpapers
         )
 
         SectionTitle(text = stringResource(R.string.nc_chat_settings_accent_section))
 
-        AccentRow(selectedAccent = selectedAccent, onAccentSelected = onAccentSelected)
+        AccentRow(
+            selectedAccent = state.accentSeed,
+            onAccentSelected = callbacks.onAccentSelected
+        )
+    }
+
+    if (state.isWallpaperPickerVisible) {
+        WallpaperPickerDialog(
+            options = state.wallpaperOptions,
+            isLoading = state.isWallpaperLoading,
+            onDismiss = callbacks.onWallpaperPickerDismissed,
+            onSelect = callbacks.onWallpaperSelected
+        )
+    }
+}
+
+@Composable
+private fun WallpaperRow(wallpaperName: String?, onPick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onPick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.nc_chat_settings_wallpaper_title),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp)
+        )
+        Text(
+            text = wallpaperName ?: stringResource(R.string.nc_chat_settings_wallpaper_none),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(onClick = onPick) {
+            Text(stringResource(R.string.nc_chat_settings_wallpaper_pick))
+        }
     }
 }
 

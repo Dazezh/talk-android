@@ -103,6 +103,12 @@ How to translate with transifex:
     <string name="nc_chat_settings_input_section">Input field</string>
     <string name="nc_chat_settings_accent_section">Accent colour</string>
     <string name="nc_chat_settings_stickers_section">Stickers</string>
+    <string name="nc_chat_settings_wallpaper_section">Chat wallpaper</string>
+    <string name="nc_chat_settings_wallpaper_title">Wallpaper</string>
+    <string name="nc_chat_settings_wallpaper_none">Not set</string>
+    <string name="nc_chat_settings_wallpaper_pick">Choose</string>
+    <string name="nc_chat_settings_wallpaper_clear">No wallpaper</string>
+    <string name="nc_chat_settings_wallpaper_empty">The Ralk folder has no images</string>
     <string name="nc_chat_settings_accent_custom">Custom colour</string>
     <string name="nc_chat_settings_accent_hue">Hue</string>
     <string name="nc_chat_settings_accent_saturation">Saturation</string>

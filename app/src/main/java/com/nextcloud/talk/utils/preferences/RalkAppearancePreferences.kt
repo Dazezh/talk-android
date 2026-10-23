@@ -34,10 +34,23 @@ class RalkAppearancePreferences(context: Context) {
         }
         set(value) = preferences.edit().putInt(KEY_STICKER_SIZE, value.ordinal).apply()
 
+    /** Path of the chat wallpaper inside the user storage, relative to its root. */
+    var wallpaperPath: String?
+        get() = preferences.getString(KEY_WALLPAPER_PATH, null)
+        set(value) = preferences.edit().putString(KEY_WALLPAPER_PATH, value).apply()
+
+    var wallpaperBlur: Boolean
+        get() = preferences.getBoolean(KEY_WALLPAPER_BLUR, false)
+        set(value) = preferences.edit().putBoolean(KEY_WALLPAPER_BLUR, value).apply()
+
+    fun clearWallpaper() = preferences.edit().remove(KEY_WALLPAPER_PATH).apply()
+
     private companion object {
         const val FILE_NAME = "ralk_appearance"
         const val KEY_ACCENT_SEED = "accent_seed"
         const val KEY_STICKER_SIZE = "sticker_size"
+        const val KEY_WALLPAPER_PATH = "wallpaper_path"
+        const val KEY_WALLPAPER_BLUR = "wallpaper_blur"
         const val NO_ACCENT = 0
     }
 }

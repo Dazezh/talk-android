@@ -24,6 +24,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.AssetFileDescriptor
 import android.database.Cursor
+import android.graphics.drawable.Drawable
 import android.location.LocationManager
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -101,6 +102,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.common.util.concurrent.ListenableFuture
 import com.nextcloud.android.common.ui.color.ColorUtil
 import com.nextcloud.talk.BuildConfig
+import androidx.compose.ui.graphics.toArgb
 import com.nextcloud.talk.R
 import com.nextcloud.talk.activities.BaseActivity
 import com.nextcloud.talk.activities.CallActivity
@@ -164,6 +166,8 @@ import com.nextcloud.talk.ui.ConversationDeleteNoticeView
 import com.nextcloud.talk.ui.ConversationDeleteNoticeViewData
 import com.nextcloud.talk.ui.OutOfOfficeView
 import com.nextcloud.talk.ui.OutOfOfficeViewData
+import com.nextcloud.talk.chat.wallpaper.ChatWallpaperRepository
+import com.nextcloud.talk.chat.wallpaper.buildWallpaperDrawable
 import com.nextcloud.talk.ui.PinnedMessageView
 import com.nextcloud.talk.ui.PlaybackSpeed
 import com.nextcloud.talk.ui.UpcomingEventView
@@ -217,6 +221,7 @@ import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_START_CALL_AFTER_ROOM_SWIT
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_SWITCH_TO_ROOM
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_THREAD_ID
 import com.nextcloud.talk.utils.permissions.PlatformPermissionUtil
+import com.nextcloud.talk.utils.preferences.RalkAppearancePreferences
 import com.nextcloud.talk.utils.rx.DisposableSet
 import com.nextcloud.talk.utils.singletons.ApplicationWideCurrentRoomHolder
 import com.nextcloud.talk.webrtc.Globals
@@ -244,6 +249,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 import java.io.File
@@ -261,6 +267,8 @@ import javax.inject.Inject
 import java.util.concurrent.CancellationException
 import kotlin.math.abs
 
+private const val WALLPAPER_SCRIM_ALPHA = 0.45f
+
 @Suppress("TooManyFunctions", "LargeClass", "LongMethod")
 @AutoInjector(NextcloudTalkApplication::class)
 class ChatActivity :
@@ -276,6 +284,12 @@ class ChatActivity :
 
     @Inject
     lateinit var ncApiCoroutines: NcApiCoroutines
+
+    @Inject
+    lateinit var okHttpClient: OkHttpClient
+
+    @Inject
+    lateinit var chatWallpaperRepository: ChatWallpaperRepository
 
     @Inject
     lateinit var permissionUtil: PlatformPermissionUtil
@@ -613,6 +627,7 @@ class ChatActivity :
         conversationInfoViewModel = ViewModelProvider(this, viewModelFactory)[ConversationInfoViewModel::class.java]
 
         setChatListContent()
+        applyChatWallpaper()
 
         setPinnedMessageContent()
 
@@ -737,6 +752,33 @@ class ChatActivity :
     }
 
     private var chatListState: LazyListState? = null
+
+    /**
+     * The wallpaper lives behind the message list only: the toolbar, the banners and the input bar
+     * keep their own surfaces, otherwise the chat loses its structure.
+     */
+    private fun applyChatWallpaper() {
+        val wallpaperPath = RalkAppearancePreferences(this).wallpaperPath
+        val host = binding.messagesListViewCompose.parent as? View
+        if (wallpaperPath == null || host == null || !::conversationUser.isInitialized) {
+            return
+        }
+
+        lifecycleScope.launch {
+            val drawable = loadWallpaperDrawable(wallpaperPath) ?: return@launch
+            host.background = drawable
+        }
+    }
+
+    private suspend fun loadWallpaperDrawable(wallpaperPath: String): Drawable? {
+        val file = chatWallpaperRepository.wallpaperFile(this, conversationUser, wallpaperPath) ?: return null
+        val colorScheme = viewThemeUtils.getColorScheme(this)
+
+        return buildWallpaperDrawable(
+            file = file,
+            scrimColor = colorScheme.surface.copy(alpha = WALLPAPER_SCRIM_ALPHA).toArgb()
+        )
+    }
 
     fun showStickerPacksCachedSnackbar() {
         Snackbar.make(binding.root, R.string.nc_stickers_cached, Snackbar.LENGTH_SHORT).show()
