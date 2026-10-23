@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
   <resources>
-    <string name= "nc_edit">Редактировать</string>
+    <string name="nc_edit">Редактировать</string>
     <string name="add_participants">Добавить</string>
     <string name="add_to_notes">Добавить в заметки</string>
     <string name="appbar_search_in">Искать в %s</string>
@@ -493,6 +493,13 @@
     <string name="nc_settings_chat_settings_summary">Поле ввода, стикеры, обои, акцент</string>
     <string name="nc_chat_settings_restart_hint">Изменение настроек внешнего вида приведёт к перезапуску приложения</string>
     <string name="nc_chat_settings_input_section">Поле ввода</string>
+    <string name="nc_chat_settings_accent_section">Акцентный цвет</string>
+    <string name="nc_chat_settings_stickers_section">Стикеры</string>
+    <string name="nc_chat_settings_accent_custom">Свой цвет</string>
+    <string name="nc_chat_settings_accent_hue">Оттенок</string>
+    <string name="nc_chat_settings_accent_saturation">Насыщенность</string>
+    <string name="nc_chat_settings_accent_brightness">Яркость</string>
+    <string name="nc_chat_settings_accent_apply">Применить</string>
     <string name="nc_settings_call_ringtone">Вызовы</string>
     <string name="nc_settings_contact_admin_of">Свяжитесь с администратором </string>
     <string name="nc_settings_diagnosis_title">Диагностика</string>

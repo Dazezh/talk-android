@@ -101,6 +101,13 @@ How to translate with transifex:
     <string name="nc_settings_chat_settings_summary">Input field, stickers, wallpaper, accent colour</string>
     <string name="nc_chat_settings_restart_hint">Changing the appearance settings will restart the app</string>
     <string name="nc_chat_settings_input_section">Input field</string>
+    <string name="nc_chat_settings_accent_section">Accent colour</string>
+    <string name="nc_chat_settings_stickers_section">Stickers</string>
+    <string name="nc_chat_settings_accent_custom">Custom colour</string>
+    <string name="nc_chat_settings_accent_hue">Hue</string>
+    <string name="nc_chat_settings_accent_saturation">Saturation</string>
+    <string name="nc_chat_settings_accent_brightness">Brightness</string>
+    <string name="nc_chat_settings_accent_apply">Apply</string>
     <string name="nc_settings_proxy_type_key" translatable="false">proxy_type</string>
     <string name="nc_settings_proxy_type_title">Proxy type</string>
     <string name="nc_settings_proxy_host_key" translatable="false">proxy_host</string>

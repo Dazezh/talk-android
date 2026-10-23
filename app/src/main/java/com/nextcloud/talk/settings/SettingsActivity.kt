@@ -287,6 +287,7 @@ class SettingsActivity :
 
         themeTitles()
         themeSwitchPreferences()
+        themeTextInputLayouts()
 
         if (openedByNotificationWarning) {
             scrollToNotificationCategory()
@@ -958,6 +959,15 @@ class SettingsActivity :
         }
     }
 
+    private fun themeTextInputLayouts() {
+        binding.run {
+            listOf(
+                themeSettingsInputLayout,
+                proxySettingsInputLayout
+            ).forEach(viewThemeUtils.material::colorTextInputLayout)
+        }
+    }
+
     private fun themeTitles() {
         binding.run {
             listOf(
@@ -1283,6 +1293,7 @@ class SettingsActivity :
                     android.widget.RadioButton(context).apply {
                         isChecked = appPreferences.compressUploadImages == reducedQuality
                         isClickable = false
+                        viewThemeUtils.platform.themeRadioButton(this)
                     }
                 )
                 addView(

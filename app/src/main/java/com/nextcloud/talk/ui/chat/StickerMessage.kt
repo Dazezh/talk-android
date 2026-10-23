@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import com.nextcloud.talk.R
@@ -22,6 +24,7 @@ import com.nextcloud.talk.models.json.opengraph.Reference
 import com.nextcloud.talk.stickers.data.stickerImageUrl
 import com.nextcloud.talk.stickers.ui.StickerImage
 import com.nextcloud.talk.ui.theme.LocalReferenceResolver
+import com.nextcloud.talk.utils.preferences.RalkAppearancePreferences
 
 /**
  * Renders a message that carries nothing but a sticker link. The link has to be confirmed as a sticker by the
@@ -50,6 +53,9 @@ fun StickerMessage(
         return
     }
 
+    val context = LocalContext.current
+    val stickerScale = remember(context) { RalkAppearancePreferences(context).stickerSize.scale }
+
     MessageScaffold(
         uiMessage = message,
         isOneToOneConversation = isOneToOneConversation,
@@ -63,7 +69,7 @@ fun StickerMessage(
                 url = stickerUrl,
                 authHeader = message.stickerAuthHeader(stickerUrl),
                 contentDescription = stringResource(R.string.nc_sticker),
-                modifier = Modifier.size(dimensionResource(R.dimen.sticker_message_size))
+                modifier = Modifier.size(dimensionResource(R.dimen.sticker_message_size) * stickerScale)
             )
         }
     )
