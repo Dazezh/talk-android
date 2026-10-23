@@ -627,7 +627,6 @@ class ChatActivity :
         conversationInfoViewModel = ViewModelProvider(this, viewModelFactory)[ConversationInfoViewModel::class.java]
 
         setChatListContent()
-        applyChatWallpaper()
 
         setPinnedMessageContent()
 
@@ -642,6 +641,7 @@ class ChatActivity :
                 .onSuccess { user ->
                     conversationUser = user
                     handleIntent(intent)
+                    applyChatWallpaper()
                     val urlForChatting = ApiUtils.getUrlForChat(chatApiVersion, conversationUser?.baseUrl, roomToken)
                     val credentials = ApiUtils.getCredentials(conversationUser!!.username, conversationUser!!.token)
 

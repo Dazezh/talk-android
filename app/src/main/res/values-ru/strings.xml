@@ -496,11 +496,12 @@
     <string name="nc_chat_settings_accent_section">Акцентный цвет</string>
     <string name="nc_chat_settings_stickers_section">Стикеры</string>
     <string name="nc_chat_settings_wallpaper_section">Обои чата</string>
-    <string name="nc_chat_settings_wallpaper_title">Обои</string>
-    <string name="nc_chat_settings_wallpaper_none">Не выбраны</string>
-    <string name="nc_chat_settings_wallpaper_pick">Выбрать</string>
     <string name="nc_chat_settings_wallpaper_clear">Без обоев</string>
     <string name="nc_chat_settings_wallpaper_empty">В папке Ralk нет изображений</string>
+    <string name="nc_chat_settings_preview_section">Предпросмотр чата</string>
+    <string name="nc_chat_settings_preview_incoming">Привет! Как тебе новые обои?</string>
+    <string name="nc_chat_settings_preview_outgoing">Выглядит отлично!</string>
+    <string name="nc_chat_settings_apply">Применить</string>
     <string name="nc_chat_settings_accent_custom">Свой цвет</string>
     <string name="nc_chat_settings_accent_hue">Оттенок</string>
     <string name="nc_chat_settings_accent_saturation">Насыщенность</string>

@@ -13,6 +13,8 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
 
 private const val MAX_WALLPAPER_DIMENSION = 2048
@@ -27,7 +29,7 @@ fun buildWallpaperDrawable(file: File, scrimColor: Int): Drawable? {
     BitmapFactory.decodeFile(file.absolutePath, bounds)
     val bitmap = if (bounds.outWidth > 0 && bounds.outHeight > 0) {
         val options = BitmapFactory.Options().apply {
-            inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight)
+            inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, MAX_WALLPAPER_DIMENSION)
         }
         BitmapFactory.decodeFile(file.absolutePath, options)
     } else {
@@ -42,9 +44,27 @@ fun buildWallpaperDrawable(file: File, scrimColor: Int): Drawable? {
     )
 }
 
-private fun sampleSize(width: Int, height: Int): Int {
+/**
+ * Decodes the wallpaper for the Compose previews. Unlike [buildWallpaperDrawable] no scrim is added:
+ * the callers draw their own.
+ */
+fun loadWallpaperImage(file: File, maxDimension: Int): ImageBitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+        return null
+    }
+
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, maxDimension)
+    }
+
+    return BitmapFactory.decodeFile(file.absolutePath, options)?.asImageBitmap()
+}
+
+private fun sampleSize(width: Int, height: Int, maxDimension: Int): Int {
     var sample = 1
-    while (width / sample > MAX_WALLPAPER_DIMENSION || height / sample > MAX_WALLPAPER_DIMENSION) {
+    while (width / sample > maxDimension || height / sample > maxDimension) {
         sample *= 2
     }
     return sample
