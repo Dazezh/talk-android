@@ -8,22 +8,26 @@
 package com.nextcloud.talk.chat.wallpaper
 
 import android.content.Context
+import android.net.Uri
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.filebrowser.webdav.ReadFolderListingOperation
 import com.nextcloud.talk.remotefilebrowser.model.RemoteFileBrowserItem
 import com.nextcloud.talk.utils.ApiUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import javax.inject.Inject
 
 data class ChatWallpaper(val path: String, val name: String)
 
 /**
- * Reads the chat wallpapers from the shared folder in the user storage. The folder is only ever read:
- * the files stay untouched on the server, the app keeps a local copy for drawing the chat background.
+ * Reads the chat wallpapers from the shared folder in the user storage and uploads new ones there.
+ * The folder is created on demand, the list only ever contains images.
  */
 class ChatWallpaperRepository @Inject constructor(private val okHttpClient: OkHttpClient) {
 
@@ -84,12 +88,70 @@ class ChatWallpaperRepository @Inject constructor(private val okHttpClient: OkHt
 
     private fun cacheName(path: String): String = Integer.toHexString(path.hashCode())
 
+    suspend fun uploadWallpaper(context: Context, user: User, source: Uri, fileName: String): ChatWallpaper? =
+        withContext(Dispatchers.IO) { upload(context, user, source, fileName) }
+
+    private fun upload(context: Context, user: User, source: Uri, fileName: String): ChatWallpaper? {
+        val credentials = ApiUtils.getCredentials(user.username, user.token)
+        val baseUrl = user.baseUrl
+        val userId = user.userId
+        if (credentials == null || baseUrl == null || userId == null) {
+            return null
+        }
+
+        val path = "$FOLDER_NAME/$fileName"
+        val uploaded = runCatching {
+            ensureFolder(ApiUtils.getUrlForFileDownload(baseUrl, userId, FOLDER_NAME), credentials) &&
+                putFile(
+                    url = ApiUtils.getUrlForFileDownload(baseUrl, userId, path),
+                    credentials = credentials,
+                    body = requestBody(context, source)
+                )
+        }.getOrDefault(false)
+
+        return if (uploaded) ChatWallpaper(path = path, name = fileName) else null
+    }
+
+    /** Creates the wallpaper folder; an already existing folder answers with 405, which is fine. */
+    private fun ensureFolder(url: String, credentials: String): Boolean {
+        val request = Request.Builder()
+            .url(url)
+            .method(METHOD_MKCOL, null)
+            .header(AUTHORIZATION_HEADER, credentials)
+            .build()
+
+        return okHttpClient.newCall(request).execute().use { response ->
+            response.isSuccessful || response.code == HTTP_CODE_METHOD_NOT_ALLOWED
+        }
+    }
+
+    private fun putFile(url: String, credentials: String, body: RequestBody): Boolean {
+        val request = Request.Builder()
+            .url(url)
+            .put(body)
+            .header(AUTHORIZATION_HEADER, credentials)
+            .build()
+
+        return okHttpClient.newCall(request).execute().use { response -> response.isSuccessful }
+    }
+
+    private fun requestBody(context: Context, source: Uri): RequestBody {
+        val mimeType = context.contentResolver.getType(source) ?: DEFAULT_MIME_TYPE
+        val bytes = context.contentResolver.openInputStream(source)?.use { it.readBytes() } ?: ByteArray(0)
+
+        return bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+    }
+
     private companion object {
         const val WALLPAPER_FOLDER = "/Ralk"
+        const val FOLDER_NAME = "Ralk"
         const val DEPTH_ONE = 1
         const val IMAGE_PREFIX = "image/"
         const val CACHE_DIRECTORY = "chat-wallpapers"
         const val AUTHORIZATION_HEADER = "Authorization"
         const val MIN_CACHED_SIZE = 2L
+        const val METHOD_MKCOL = "MKCOL"
+        const val HTTP_CODE_METHOD_NOT_ALLOWED = 405
+        const val DEFAULT_MIME_TYPE = "image/jpeg"
     }
 }

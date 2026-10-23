@@ -75,6 +75,9 @@ internal fun ChatPreview(
     val isDark = isSystemInDarkTheme()
     val accent = remember(state.accentSeed, isDark) { previewAccent(state.accentSeed, isDark) }
     val wallpaper by produceState<ImageBitmap?>(initialValue = null, state.wallpaperPath, user) {
+        // produceState keeps the previous value when the keys change, so the picture of the
+        // previously selected wallpaper has to be dropped explicitly.
+        value = null
         val path = state.wallpaperPath
         if (path != null && user != null) {
             value = repository.wallpaperFile(context, user, path)?.let {
@@ -91,6 +94,7 @@ internal fun ChatPreview(
             .height(previewHeight)
             .clip(previewShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, previewShape)
     ) {
         if (previewWallpaper != null) {
             Image(
@@ -143,7 +147,7 @@ private fun PreviewSticker(size: Dp, tint: Color) {
         contentAlignment = Alignment.Center
     ) {
         Image(
-            painter = painterResource(R.drawable.ic_ralk_letter_r),
+            painter = painterResource(R.drawable.ic_ralk_splash_letter_r),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit,

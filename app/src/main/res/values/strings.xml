@@ -105,6 +105,7 @@ How to translate with transifex:
     <string name="nc_chat_settings_stickers_section">Stickers</string>
     <string name="nc_chat_settings_wallpaper_section">Chat wallpaper</string>
     <string name="nc_chat_settings_wallpaper_clear">No wallpaper</string>
+    <string name="nc_chat_settings_wallpaper_upload">Upload</string>
     <string name="nc_chat_settings_wallpaper_empty">The Ralk folder has no images</string>
     <string name="nc_chat_settings_preview_section">Chat preview</string>
     <string name="nc_chat_settings_preview_incoming">Hi! How do you like the new look?</string>

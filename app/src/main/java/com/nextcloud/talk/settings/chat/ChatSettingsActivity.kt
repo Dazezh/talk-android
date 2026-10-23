@@ -8,8 +8,13 @@
 package com.nextcloud.talk.settings.chat
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -35,6 +40,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -55,6 +61,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
@@ -77,6 +84,11 @@ import javax.inject.Inject
 
 private const val THUMBNAIL_MAX_DIMENSION = 320
 private const val NO_WALLPAPER_KEY = "no_wallpaper"
+private const val UPLOAD_KEY = "upload_wallpaper"
+private const val LOADING_KEY = "wallpaper_loading"
+private const val DEFAULT_WALLPAPER_NAME = "wallpaper.jpg"
+private const val FIRST_DUPLICATE_INDEX = 2
+private const val WALLPAPER_MIME_TYPE = "image/*"
 private const val TILE_BORDER_WIDTH = 2
 private val tileSize = 84.dp
 private val tileShape = RoundedCornerShape(12.dp)
@@ -86,9 +98,7 @@ private data class ChatSettingsUiState(
     val rectangularInput: Boolean,
     val stickerSize: StickerSize,
     val accentSeed: Int,
-    val wallpaperPath: String?,
-    val wallpapers: List<ChatWallpaper>?,
-    val isWallpaperLoading: Boolean
+    val wallpaperList: WallpaperListState
 )
 
 private data class ChatSettingsCallbacks(
@@ -96,13 +106,15 @@ private data class ChatSettingsCallbacks(
     val onStickerSizeChange: (StickerSize) -> Unit,
     val onAccentSelected: (Int) -> Unit,
     val onWallpaperSelected: (String?) -> Unit,
+    val onUpload: () -> Unit,
     val onApply: () -> Unit
 )
 
 private data class WallpaperListState(
     val wallpapers: List<ChatWallpaper>?,
     val selectedPath: String?,
-    val isLoading: Boolean
+    val isLoading: Boolean,
+    val isUploading: Boolean
 )
 
 /**
@@ -125,12 +137,20 @@ class ChatSettingsActivity : BaseActivity() {
     private var wallpaperPath by mutableStateOf<String?>(null)
     private var wallpapers by mutableStateOf<List<ChatWallpaper>?>(null)
     private var isWallpaperLoading by mutableStateOf(false)
+    private var isUploading by mutableStateOf(false)
 
     private var wallpaperUser: User? = null
+    private lateinit var pickWallpaper: ActivityResultLauncher<String>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NextcloudTalkApplication.sharedApplication!!.componentApplication.inject(this)
+
+        pickWallpaper = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                uploadWallpaper(uri)
+            }
+        }
 
         val appearancePreferences = RalkAppearancePreferences(this)
         rectangularInput = appPreferences.messageInputRectangular
@@ -173,9 +193,12 @@ class ChatSettingsActivity : BaseActivity() {
                             rectangularInput = rectangularInput,
                             stickerSize = stickerSize,
                             accentSeed = accentSeed,
-                            wallpaperPath = wallpaperPath,
-                            wallpapers = wallpapers,
-                            isWallpaperLoading = isWallpaperLoading
+                            wallpaperList = WallpaperListState(
+                                wallpapers = wallpapers,
+                                selectedPath = wallpaperPath,
+                                isLoading = isWallpaperLoading,
+                                isUploading = isUploading
+                            )
                         ),
                         callbacks = buildCallbacks(),
                         repository = chatWallpaperRepository,
@@ -193,6 +216,7 @@ class ChatSettingsActivity : BaseActivity() {
             onStickerSizeChange = { stickerSize = it },
             onAccentSelected = { accentSeed = it },
             onWallpaperSelected = { wallpaperPath = it },
+            onUpload = { pickWallpaper.launch(WALLPAPER_MIME_TYPE) },
             onApply = ::applySettings
         )
 
@@ -204,6 +228,50 @@ class ChatSettingsActivity : BaseActivity() {
             isWallpaperLoading = false
         }
     }
+
+    private fun uploadWallpaper(source: Uri) {
+        val user = wallpaperUser ?: return
+        isUploading = true
+        lifecycleScope.launch {
+            val uploaded = chatWallpaperRepository.uploadWallpaper(
+                context = this@ChatSettingsActivity,
+                user = user,
+                source = source,
+                fileName = uniqueFileName(source)
+            )
+            isUploading = false
+            if (uploaded == null) {
+                Toast.makeText(this@ChatSettingsActivity, R.string.nc_common_error_sorry, Toast.LENGTH_LONG).show()
+            } else {
+                wallpaperPath = uploaded.path
+                loadWallpapers()
+            }
+        }
+    }
+
+    /** Keeps existing wallpapers intact by numbering a second upload with the same name. */
+    private fun uniqueFileName(source: Uri): String {
+        val displayName = displayName(source) ?: DEFAULT_WALLPAPER_NAME
+        val taken = wallpapers.orEmpty().mapTo(mutableSetOf()) { it.name }
+        if (displayName !in taken) {
+            return displayName
+        }
+
+        val base = displayName.substringBeforeLast('.')
+        val extension = displayName.substringAfterLast('.', "")
+        var index = FIRST_DUPLICATE_INDEX
+        var candidate: String
+        do {
+            candidate = if (extension.isEmpty()) "$base ($index)" else "$base ($index).$extension"
+            index++
+        } while (candidate in taken)
+
+        return candidate
+    }
+
+    private fun displayName(source: Uri): String? =
+        contentResolver.query(source, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
 
     private fun applySettings() {
         appPreferences.setMessageInputRectangular(rectangularInput)
@@ -277,21 +345,18 @@ private fun ChatSettingsScreen(
         SectionTitle(textRes = R.string.nc_chat_settings_wallpaper_section)
 
         WallpaperCarousel(
-            state = WallpaperListState(
-                wallpapers = state.wallpapers,
-                selectedPath = state.wallpaperPath,
-                isLoading = state.isWallpaperLoading
-            ),
+            state = state.wallpaperList,
             repository = repository,
             user = user,
-            onSelect = callbacks.onWallpaperSelected
+            onSelect = callbacks.onWallpaperSelected,
+            onUpload = callbacks.onUpload
         )
 
         SectionTitle(textRes = R.string.nc_chat_settings_preview_section)
 
         ChatPreview(
             state = ChatPreviewState(
-                wallpaperPath = state.wallpaperPath,
+                wallpaperPath = state.wallpaperList.selectedPath,
                 accentSeed = state.accentSeed,
                 stickerSize = state.stickerSize
             ),
@@ -306,35 +371,18 @@ private fun WallpaperCarousel(
     state: WallpaperListState,
     repository: ChatWallpaperRepository,
     user: User?,
-    onSelect: (String?) -> Unit
+    onSelect: (String?) -> Unit,
+    onUpload: () -> Unit
 ) {
     val wallpapers = state.wallpapers
-    if (state.isLoading || wallpapers == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = tilePadding),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
-    if (wallpapers.isEmpty()) {
-        Text(
-            text = stringResource(R.string.nc_chat_settings_wallpaper_empty),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = tilePadding, vertical = 8.dp)
-        )
-        return
-    }
 
     LazyRow(
         contentPadding = PaddingValues(horizontal = tilePadding, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        item(key = UPLOAD_KEY) {
+            UploadTile(isUploading = state.isUploading, onClick = onUpload)
+        }
         item(key = NO_WALLPAPER_KEY) {
             WallpaperTile(
                 option = null,
@@ -344,15 +392,28 @@ private fun WallpaperCarousel(
                 onSelect = { onSelect(null) }
             )
         }
-        items(items = wallpapers, key = { it.path }) { wallpaper ->
-            WallpaperTile(
-                option = wallpaper,
-                selected = state.selectedPath == wallpaper.path,
-                repository = repository,
-                user = user,
-                onSelect = { onSelect(wallpaper.path) }
-            )
+        if (wallpapers == null) {
+            item(key = LOADING_KEY) { LoadingTile() }
+        } else {
+            items(items = wallpapers, key = { it.path }) { wallpaper ->
+                WallpaperTile(
+                    option = wallpaper,
+                    selected = state.selectedPath == wallpaper.path,
+                    repository = repository,
+                    user = user,
+                    onSelect = { onSelect(wallpaper.path) }
+                )
+            }
         }
+    }
+
+    if (wallpapers != null && wallpapers.isEmpty() && !state.isLoading) {
+        Text(
+            text = stringResource(R.string.nc_chat_settings_wallpaper_empty),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = tilePadding, vertical = 8.dp)
+        )
     }
 }
 
@@ -366,6 +427,7 @@ private fun WallpaperTile(
 ) {
     val context = LocalContext.current
     val image by produceState<ImageBitmap?>(initialValue = null, option?.path, user) {
+        value = null
         val path = option?.path
         if (path != null && user != null) {
             value = repository.wallpaperFile(context, user, path)?.let {
@@ -404,6 +466,43 @@ private fun WallpaperTile(
                 )
             } ?: CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
         }
+    }
+}
+
+@Composable
+private fun UploadTile(isUploading: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(tileSize)
+            .clip(tileShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(enabled = !isUploading, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isUploading) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    painter = painterResource(R.drawable.upload),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = stringResource(R.string.nc_chat_settings_wallpaper_upload),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadingTile() {
+    Box(modifier = Modifier.size(tileSize), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
     }
 }
 
