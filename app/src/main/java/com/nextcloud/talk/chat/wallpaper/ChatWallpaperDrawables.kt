@@ -7,15 +7,22 @@
 
 package com.nextcloud.talk.chat.wallpaper
 
-import android.content.res.Resources
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.drawable.BitmapDrawable
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.Shader
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
+import kotlin.math.max
 
 private const val MAX_WALLPAPER_DIMENSION = 2048
 
@@ -38,7 +45,7 @@ fun buildWallpaperDrawable(file: File, scrimColor: Int): Drawable? {
 
     return LayerDrawable(
         arrayOf(
-            BitmapDrawable(Resources.getSystem(), bitmap),
+            CenterCropDrawable(bitmap),
             ColorDrawable(scrimColor)
         )
     )
@@ -68,4 +75,43 @@ private fun sampleSize(width: Int, height: Int, maxDimension: Int): Int {
         sample *= 2
     }
     return sample
+}
+
+/**
+ * Fills the view with the bitmap without distorting it: the picture is scaled up until it covers
+ * the bounds and the overflow is cut off, like `ContentScale.Crop` does for Compose images.
+ */
+private class CenterCropDrawable(private val bitmap: Bitmap) : Drawable() {
+    private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val matrix = Matrix()
+
+    init {
+        paint.shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+    }
+
+    override fun draw(canvas: Canvas) {
+        val bitmapWidth = bitmap.width.toFloat()
+        val bitmapHeight = bitmap.height.toFloat()
+        val scale = max(bounds.width() / bitmapWidth, bounds.height() / bitmapHeight)
+
+        matrix.setScale(scale, scale)
+        matrix.postTranslate(
+            bounds.left + (bounds.width() - bitmapWidth * scale) / 2f,
+            bounds.top + (bounds.height() - bitmapHeight * scale) / 2f
+        )
+        paint.shader?.setLocalMatrix(matrix)
+
+        canvas.drawRect(bounds, paint)
+    }
+
+    override fun setAlpha(alpha: Int) {
+        paint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        paint.colorFilter = colorFilter
+    }
+
+    @Deprecated("Deprecated in Drawable", ReplaceWith("PixelFormat.TRANSLUCENT"))
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }

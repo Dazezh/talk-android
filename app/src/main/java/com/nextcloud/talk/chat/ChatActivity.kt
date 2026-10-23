@@ -754,15 +754,16 @@ class ChatActivity :
     private var chatListState: LazyListState? = null
 
     /**
-     * The wallpaper lives behind the message list only: the toolbar, the banners and the input bar
-     * keep their own surfaces, otherwise the chat loses its structure.
+     * The wallpaper covers the whole chat area, so it also shows next to the rounded input bar. The
+     * toolbar, the banners and the rectangular input bar keep their own surfaces, otherwise the chat
+     * loses its structure.
      */
     private fun applyChatWallpaper() {
         val wallpaperPath = RalkAppearancePreferences(this).wallpaperPath
-        val host = binding.messagesListViewCompose.parent as? View
-        if (wallpaperPath == null || host == null || !::conversationUser.isInitialized) {
+        if (wallpaperPath == null || !::conversationUser.isInitialized) {
             return
         }
+        val host: View = binding.chatContainer
 
         lifecycleScope.launch {
             val drawable = loadWallpaperDrawable(wallpaperPath) ?: return@launch

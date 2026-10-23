@@ -1317,12 +1317,15 @@ class MessageInputFragment : Fragment() {
             bottomMargin = callBannerGap
         }
 
+        // The recording annotations sit on the input card, so they take the card colour instead of
+        // the grey surface variant that used to stand out in the rectangular mode.
+        val recordingAnnotationRole = if (rectangular) ColorRole.SURFACE else ColorRole.SURFACE_VARIANT
         binding.fragmentMessageInputView.findViewById<ImageView>(R.id.microphoneEnabledInfoBackground)?.let {
-            viewThemeUtils.platform.themeViewBackground(it, ColorRole.SURFACE_VARIANT)
+            viewThemeUtils.platform.themeViewBackground(it, recordingAnnotationRole)
         }
 
         binding.fragmentMessageInputView.findViewById<Chronometer>(R.id.audioRecordDuration)?.let {
-            viewThemeUtils.platform.themeViewBackground(it, ColorRole.SURFACE_VARIANT)
+            viewThemeUtils.platform.themeViewBackground(it, recordingAnnotationRole)
         }
 
         binding.fragmentMessageInputView.button?.let { viewThemeUtils.platform.colorImageView(it, ColorRole.PRIMARY) }

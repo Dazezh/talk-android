@@ -570,7 +570,7 @@ fun UnreadMessagesPopup(unreadCount: Int, onClick: () -> Unit, modifier: Modifie
 
 @Composable
 fun DateHeaderLabel(text: String, modifier: Modifier = Modifier) {
-    ChatPill(modifier = modifier) {
+    ChatPill(modifier = modifier, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,

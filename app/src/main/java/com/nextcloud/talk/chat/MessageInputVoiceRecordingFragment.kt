@@ -27,6 +27,7 @@ import com.nextcloud.talk.chat.data.io.AudioFocusRequestManager
 import com.nextcloud.talk.chat.viewmodels.MessageInputViewModel
 import com.nextcloud.talk.databinding.FragmentMessageInputVoiceRecordingBinding
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
+import com.nextcloud.talk.utils.preferences.AppPreferences
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -44,6 +45,9 @@ class MessageInputVoiceRecordingFragment : Fragment() {
 
     @Inject
     lateinit var viewThemeUtils: ViewThemeUtils
+
+    @Inject
+    lateinit var appPreferences: AppPreferences
 
     private val messageInputViewModel: MessageInputViewModel by activityViewModels()
 
@@ -209,6 +213,15 @@ class MessageInputVoiceRecordingFragment : Fragment() {
         binding.playPauseBtn.let {
             viewThemeUtils.material.colorMaterialButtonText(it)
         }
+
+        // The timer sits on the input card, so it takes the card colour instead of the grey
+        // default that stands out in the rectangular mode.
+        val recordingCardRole = if (appPreferences.messageInputRectangular) {
+            ColorRole.SURFACE
+        } else {
+            ColorRole.SURFACE_VARIANT
+        }
+        viewThemeUtils.platform.themeViewBackground(binding.audioRecordDuration, recordingCardRole)
 
         binding.seekbar.let {
             viewThemeUtils.platform.themeHorizontalSeekBar(it)

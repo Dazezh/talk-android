@@ -18,19 +18,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
+private const val PILL_ALPHA = 0.45f
 private val pillCornerRadius = 12.dp
 private val pillHorizontalPadding = 12.dp
 private val pillVerticalPadding = 4.dp
 
 /**
  * Rounded container for the small pieces of context in the chat: date headers, system messages and
- * the unread messages marker. A pill keeps them readable on any chat background the user picks,
- * which a bare line of text cannot guarantee.
+ * the unread messages marker. The default container is translucent so the wallpaper stays visible
+ * behind it; the pills that anchor the list (dates, unread marker) pass an opaque colour instead.
  */
 @Composable
 fun ChatPill(
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    containerColor: Color = MaterialTheme.colorScheme.surface.copy(alpha = PILL_ALPHA),
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
