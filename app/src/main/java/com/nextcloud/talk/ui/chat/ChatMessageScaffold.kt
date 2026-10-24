@@ -124,6 +124,9 @@ private val quoteIconContainerRadius = 8.dp
 private val quoteIconSize = 24.dp
 
 private val reactionRadius = 50.dp
+private val inlineMetadataStartPadding = 4.dp
+private val inlineMetadataEndPadding = 0.dp
+private val belowMetadataTopPadding = 4.dp
 private const val REACTION_COLOR_ANIMATION_MILLIS = 150
 private const val REACTION_APPEARANCE_ANIMATION_MILLIS = 90
 private const val REACTION_APPEARANCE_INITIAL_SCALE = 0.85f
@@ -364,14 +367,6 @@ private fun MessageBubbleWithReactions(
         isFirstMessageOfThreadInNormalChat(uiMessage, conversationThreadId)
 
     Column(horizontalAlignment = if (incoming) Alignment.Start else Alignment.End) {
-        if (incoming && isOneToOneConversation && !uiMessage.isGrouped) {
-            Text(
-                text = uiMessage.actorDisplayName,
-                fontSize = authorTextSize,
-                color = colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-            )
-        }
         Surface(
             modifier = bubbleModifier,
             color = resolvedBubbleColor,
@@ -385,6 +380,7 @@ private fun MessageBubbleWithReactions(
                 captionText = captionText,
                 showInlineMetadata = showInlineMetadata,
                 showQuote = showQuote,
+                showAuthor = incoming && isOneToOneConversation && !uiMessage.isGrouped,
                 contentMinWidth = contentMinWidth,
                 contentMaxWidth = maxBubbleWidth,
                 content = content
@@ -412,6 +408,7 @@ private fun MessageBubbleContent(
     captionText: String?,
     showInlineMetadata: Boolean,
     showQuote: Boolean,
+    showAuthor: Boolean,
     contentMinWidth: Dp,
     contentMaxWidth: Dp,
     content: @Composable () -> Unit
@@ -426,6 +423,21 @@ private fun MessageBubbleContent(
         modifier = bubbleContentModifier,
         verticalArrangement = Arrangement.Center
     ) {
+        // The author belongs to the bubble: outside of it the name used to float between the
+        // messages of a group conversation.
+        if (showAuthor) {
+            Text(
+                text = uiMessage.actorDisplayName,
+                fontSize = authorTextSize,
+                fontWeight = FontWeight.Medium,
+                color = colorScheme.primary,
+                modifier = Modifier.padding(
+                    start = if (includePadding) 0.dp else 8.dp,
+                    top = if (includePadding) 0.dp else 8.dp,
+                    bottom = 2.dp
+                )
+            )
+        }
         MessageHeader(
             uiMessage = uiMessage,
             paddingAlreadyApplied = includePadding,
@@ -521,7 +533,11 @@ private fun ColumnScope.MessageBodyWithMetadata(
                     ) {
                         content()
                     }
-                    MessageMetadata(uiMessage)
+                    MessageMetadata(
+                        uiMessage = uiMessage,
+                        startPadding = inlineMetadataStartPadding,
+                        endPadding = inlineMetadataEndPadding
+                    )
                 }
             }
         }
@@ -534,7 +550,7 @@ private fun ColumnScope.MessageBodyWithMetadata(
                 Row(
                     modifier = Modifier
                         .align(Alignment.End)
-                        .padding(top = 8.dp, bottom = 5.dp, end = 5.dp),
+                        .padding(top = belowMetadataTopPadding, bottom = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     MessageMetadata(uiMessage)
@@ -713,14 +729,19 @@ private fun bubbleMetadataColor(message: ChatMessageUi): Color =
     }
 
 @Composable
-private fun MessageMetadata(uiMessage: ChatMessageUi, color: Color = bubbleMetadataColor(uiMessage)) {
+private fun MessageMetadata(
+    uiMessage: ChatMessageUi,
+    color: Color = bubbleMetadataColor(uiMessage),
+    startPadding: Dp = 10.dp,
+    endPadding: Dp = 10.dp
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End,
         modifier = Modifier
             .padding(
-                start = 10.dp,
-                end = 10.dp
+                start = startPadding,
+                end = endPadding
             )
     ) {
         if (uiMessage.isEdited) {
@@ -772,7 +793,11 @@ private fun ColumnScope.CaptionWithMetadata(
                 highlightSearchTerm = highlightSearchTerm
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                MessageMetadata(uiMessage)
+                MessageMetadata(
+                    uiMessage = uiMessage,
+                    startPadding = inlineMetadataStartPadding,
+                    endPadding = inlineMetadataEndPadding
+                )
             }
         }
     } else {
