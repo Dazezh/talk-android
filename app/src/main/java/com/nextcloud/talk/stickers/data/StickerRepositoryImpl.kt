@@ -26,6 +26,9 @@ import com.nextcloud.talk.utils.CapabilitiesUtil
 import com.nextcloud.talk.utils.UserIdUtils
 import kotlinx.coroutines.CancellationException
 
+// The repository keeps the request, cache and mapping helpers together on purpose: the mapping ones
+// are private extensions that only exist to convert the cache and network payloads.
+@Suppress("TooManyFunctions")
 class StickerRepositoryImpl(
     private val ncApi: NcApiCoroutines,
     private val cache: StickerCache,

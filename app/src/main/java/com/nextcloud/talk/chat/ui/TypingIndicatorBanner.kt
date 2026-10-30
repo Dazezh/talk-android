@@ -34,13 +34,13 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.nextcloud.talk.R
+import com.nextcloud.talk.ui.theme.GlassTokens
 import com.nextcloud.talk.utils.DisplayUtils
 
 private const val MAX_NAME_LENGTH = 14
 private const val ANIMATION_DURATION_MS = 200
 private const val MAX_NAMED_PARTICIPANTS = 3
 private const val FOUR_PARTICIPANTS = 4
-private const val TYPING_BANNER_ALPHA = 0.45f
 
 private data class TypingStrings(
     val isTyping: String,
@@ -74,7 +74,7 @@ fun TypingIndicatorBanner(names: List<String>, modifier: Modifier = Modifier) {
             text = text,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = TYPING_BANNER_ALPHA))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = GlassTokens.PANEL_ALPHA))
                 .padding(horizontal = 16.dp, vertical = 1.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,

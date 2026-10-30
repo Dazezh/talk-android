@@ -45,11 +45,11 @@ import com.nextcloud.talk.chat.wallpaper.ChatWallpaperRepository
 import com.nextcloud.talk.chat.wallpaper.loadWallpaperImage
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.ui.theme.BrandMaterialSchemes
+import com.nextcloud.talk.ui.theme.GlassTokens
 import com.nextcloud.talk.utils.preferences.StickerSize
 import dynamiccolor.MaterialDynamicColors
 
 private const val PREVIEW_MAX_DIMENSION = 1080
-private const val PREVIEW_SCRIM_ALPHA = 0.45f
 private const val PREVIEW_STICKER_BORDER = 2
 private val previewHeight = 240.dp
 private val previewPadding = 12.dp
@@ -106,7 +106,7 @@ internal fun ChatPreview(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = PREVIEW_SCRIM_ALPHA))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = GlassTokens.SCRIM_ALPHA))
             )
         }
 

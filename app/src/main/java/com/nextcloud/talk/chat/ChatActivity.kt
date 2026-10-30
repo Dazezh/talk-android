@@ -184,6 +184,7 @@ import com.nextcloud.talk.stickers.data.StickerImageLoader
 import com.nextcloud.talk.stickers.ui.LocalStickerImageLoader
 import com.nextcloud.talk.ui.theme.LocalMessageUtils
 import com.nextcloud.talk.ui.theme.LocalReferenceResolver
+import com.nextcloud.talk.ui.theme.GlassTokens
 import com.nextcloud.talk.ui.theme.LocalViewThemeUtils
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.AudioUtils
@@ -266,8 +267,6 @@ import java.util.concurrent.ExecutionException
 import javax.inject.Inject
 import java.util.concurrent.CancellationException
 import kotlin.math.abs
-
-private const val WALLPAPER_SCRIM_ALPHA = 0.45f
 
 @Suppress("TooManyFunctions", "LargeClass", "LongMethod")
 @AutoInjector(NextcloudTalkApplication::class)
@@ -777,7 +776,7 @@ class ChatActivity :
 
         return buildWallpaperDrawable(
             file = file,
-            scrimColor = colorScheme.surface.copy(alpha = WALLPAPER_SCRIM_ALPHA).toArgb()
+            scrimColor = colorScheme.surface.copy(alpha = GlassTokens.SCRIM_ALPHA).toArgb()
         )
     }
 

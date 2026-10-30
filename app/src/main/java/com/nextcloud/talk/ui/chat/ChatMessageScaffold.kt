@@ -25,6 +25,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -124,9 +125,12 @@ private val quoteIconContainerRadius = 8.dp
 private val quoteIconSize = 24.dp
 
 private val reactionRadius = 50.dp
-private val inlineMetadataStartPadding = 4.dp
+private val inlineMetadataStartPadding = 2.dp
 private val inlineMetadataEndPadding = 0.dp
-private val belowMetadataTopPadding = 4.dp
+private val belowMetadataTopPadding = 2.dp
+private val inlineContentBottomOffset = 3.dp
+private val bubbleHorizontalPadding = 10.dp
+private val bubbleVerticalPadding = 2.dp
 private const val REACTION_COLOR_ANIMATION_MILLIS = 150
 private const val REACTION_APPEARANCE_ANIMATION_MILLIS = 90
 private const val REACTION_APPEARANCE_INITIAL_SCALE = 0.85f
@@ -414,7 +418,12 @@ private fun MessageBubbleContent(
     content: @Composable () -> Unit
 ) {
     val bubbleContentModifier = if (includePadding) {
-        Modifier.padding(10.dp, 4.dp, 10.dp, 4.dp)
+        Modifier.padding(
+            start = bubbleHorizontalPadding,
+            top = bubbleVerticalPadding,
+            end = bubbleHorizontalPadding,
+            bottom = bubbleVerticalPadding
+        )
     } else {
         Modifier
     }
@@ -430,7 +439,7 @@ private fun MessageBubbleContent(
                 text = uiMessage.actorDisplayName,
                 fontSize = authorTextSize,
                 fontWeight = FontWeight.Medium,
-                color = colorScheme.primary,
+                color = rememberAuthorColor(uiMessage),
                 modifier = Modifier.padding(
                     start = if (includePadding) 0.dp else 8.dp,
                     top = if (includePadding) 0.dp else 8.dp,
@@ -518,7 +527,7 @@ private fun ColumnScope.MessageBodyWithMetadata(
 
         MetadataLayoutMode.INLINE -> {
             if (suppressMetadata) {
-                Box(modifier = Modifier.padding(bottom = 5.dp)) {
+                Box(modifier = Modifier.padding(bottom = inlineContentBottomOffset)) {
                     content()
                 }
             } else {
@@ -528,7 +537,7 @@ private fun ColumnScope.MessageBodyWithMetadata(
                 ) {
                     Box(
                         modifier = Modifier
-                            .padding(bottom = 5.dp)
+                            .padding(bottom = inlineContentBottomOffset)
                             .weight(1f, fill = false)
                     ) {
                         content()
@@ -550,7 +559,7 @@ private fun ColumnScope.MessageBodyWithMetadata(
                 Row(
                     modifier = Modifier
                         .align(Alignment.End)
-                        .padding(top = belowMetadataTopPadding, bottom = 5.dp),
+                        .padding(top = belowMetadataTopPadding),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     MessageMetadata(uiMessage)
@@ -727,6 +736,14 @@ private fun bubbleMetadataColor(message: ChatMessageUi): Color =
     } else {
         colorScheme.onPrimaryContainer.copy(alpha = IN_BUBBLE_META_ALPHA)
     }
+
+@Composable
+private fun rememberAuthorColor(message: ChatMessageUi): Color {
+    val isDark = isSystemInDarkTheme()
+    val actorKey = message.actorId ?: message.actorDisplayName
+
+    return remember(actorKey, isDark) { authorColor(actorKey, isDark) }
+}
 
 @Composable
 private fun MessageMetadata(

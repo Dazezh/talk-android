@@ -35,6 +35,7 @@ tests/proguard-project.txt
 
 # Android Studio and Gradle specific entries
 .gradle
+.kotlin
 .idea/*
 !.idea/codeStyles/
 .idea

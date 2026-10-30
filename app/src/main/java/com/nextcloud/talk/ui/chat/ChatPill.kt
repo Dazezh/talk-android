@@ -17,8 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.nextcloud.talk.ui.theme.GlassTokens
 
-private const val PILL_ALPHA = 0.45f
 private val pillCornerRadius = 12.dp
 private val pillHorizontalPadding = 12.dp
 private val pillVerticalPadding = 4.dp
@@ -31,7 +31,7 @@ private val pillVerticalPadding = 4.dp
 @Composable
 fun ChatPill(
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surface.copy(alpha = PILL_ALPHA),
+    containerColor: Color = MaterialTheme.colorScheme.surface.copy(alpha = GlassTokens.PANEL_ALPHA),
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
