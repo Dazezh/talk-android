@@ -21,8 +21,8 @@ data class ReferenceDto(
     @JsonField(name = ["openGraphObject"])
     var openGraphObject: OpenGraphObjectDto? = null,
     @JsonField(name = ["accessible"])
-    var accessible: Boolean
+    var accessible: Boolean? = null
 ) : Parcelable {
     // This constructor is added to work with the 'com.bluelinelabs.logansquare.annotation.JsonObject'
-    constructor() : this(null, null, null, false)
+    constructor() : this(null, null, null, null)
 }
