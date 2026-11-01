@@ -9,75 +9,88 @@ package com.nextcloud.talk.data.user
 
 import android.util.Log
 import com.nextcloud.talk.data.user.model.User
+import com.nextcloud.talk.data.user.model.UserCapabilitiesUpdate
+import com.nextcloud.talk.data.user.model.UserClientCertificateUpdate
+import com.nextcloud.talk.data.user.model.UserCredentialsUpdate
+import com.nextcloud.talk.data.user.model.UserDisplayNameUpdate
+import com.nextcloud.talk.data.user.model.UserExternalSignalingServerUpdate
+import com.nextcloud.talk.models.ExternalSignalingServer
+import com.nextcloud.talk.models.json.capabilities.CapabilitiesDto
+import com.nextcloud.talk.models.json.capabilities.ServerVersionDto
 import com.nextcloud.talk.models.json.push.PushConfigurationState
-import io.reactivex.Maybe
-import io.reactivex.Observable
-import io.reactivex.Single
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 @Suppress("TooManyFunctions")
 class UsersRepositoryImpl(private val usersDao: UsersDao) : UsersRepository {
 
-    override fun getActiveUser(): Maybe<User> {
-        val user = usersDao.getActiveUser()
-            .map {
-                setUserAsActiveWithId(it.id)
-                UserMapper.toModel(it)!!
-            }
-        return user
-    }
+    override suspend fun getActiveUser(): User? = UserMapper.toModel(usersDao.getActiveUser())
 
-    override fun getActiveUserObservable(): Observable<User> =
-        usersDao.getActiveUserObservable().map {
+    override fun getActiveUserFlow(): Flow<User?> =
+        usersDao.getActiveUserFlow().map {
             UserMapper.toModel(it)
         }
 
-    override fun getUsers(): Single<List<User>> = usersDao.getUsers().map { UserMapper.toModel(it) }
+    override suspend fun getUsers(): List<User> = UserMapper.toModel(usersDao.getUsers())
 
-    override fun getUserWithId(id: Long): Maybe<User> = usersDao.getUserWithId(id).map { UserMapper.toModel(it) }
+    override suspend fun getUserWithId(id: Long): User? = UserMapper.toModel(usersDao.getUserWithId(id))
 
-    override fun getUserWithIdNotScheduledForDeletion(id: Long): Maybe<User> =
-        usersDao.getUserWithIdNotScheduledForDeletion(id).map {
+    override fun getUserWithIdFlow(id: Long): Flow<User?> =
+        usersDao.getUserWithIdFlow(id).map {
             UserMapper.toModel(it)
         }
 
-    override fun getUserWithUserId(userId: String): Maybe<User> =
-        usersDao.getUserWithUserId(userId).map {
-            UserMapper.toModel(it)
-        }
+    override suspend fun repairMultipleActiveUsers(): Int = usersDao.repairMultipleActiveUsers()
 
-    override fun getUsersScheduledForDeletion(): Single<List<User>> =
-        usersDao.getUsersScheduledForDeletion().map {
-            UserMapper.toModel(it)
-        }
+    override suspend fun getUserWithIdNotScheduledForDeletion(id: Long): User? =
+        UserMapper.toModel(usersDao.getUserWithIdNotScheduledForDeletion(id))
 
-    override fun getUsersNotScheduledForDeletion(): Single<List<User>> =
-        usersDao.getUsersNotScheduledForDeletion().map {
-            UserMapper.toModel(it)
-        }
+    override suspend fun getUserWithUserId(userId: String): User? =
+        UserMapper.toModel(usersDao.getUserWithUserId(userId))
 
-    override fun getUserWithUsernameAndServer(username: String, server: String): Maybe<User> =
-        usersDao.getUserWithUsernameAndServer(username, server).map {
-            UserMapper.toModel(it)
-        }
+    override suspend fun getUsersScheduledForDeletion(): List<User> =
+        UserMapper.toModel(usersDao.getUsersScheduledForDeletion())
 
-    override fun updateUser(user: User): Int = usersDao.updateUser(UserMapper.toEntity(user))
+    override suspend fun getUsersNotScheduledForDeletion(): List<User> =
+        UserMapper.toModel(usersDao.getUsersNotScheduledForDeletion())
 
-    override fun insertUser(user: User): Long = usersDao.saveUser(UserMapper.toEntity(user))
+    override suspend fun getUserWithUsernameAndServer(username: String, server: String): User? =
+        UserMapper.toModel(usersDao.getUserWithUsernameAndServer(username, server))
 
-    override fun setUserAsActiveWithId(id: Long): Single<Boolean> {
+    override suspend fun updateUser(user: User): Int = usersDao.updateUser(UserMapper.toEntity(user))
+
+    override suspend fun insertUser(user: User): Long = usersDao.saveUser(UserMapper.toEntity(user))
+
+    override suspend fun setUserAsActiveWithId(id: Long): Boolean {
         val amountUpdated = usersDao.setUserAsActiveWithId(id)
         Log.d(TAG, "setUserAsActiveWithId. amountUpdated: $amountUpdated")
-        return if (amountUpdated > 0) {
-            Single.just(true)
-        } else {
-            Single.just(false)
-        }
+        return amountUpdated > 0
     }
 
-    override fun deleteUser(user: User): Int = usersDao.deleteUser(UserMapper.toEntity(user))
+    override suspend fun deleteUser(user: User): Int = usersDao.deleteUser(UserMapper.toEntity(user))
 
-    override fun updatePushState(id: Long, state: PushConfigurationState): Single<Int> =
+    override suspend fun updatePushState(id: Long, state: PushConfigurationState): Int =
         usersDao.updatePushState(id, state)
+
+    override suspend fun updateCapabilities(
+        id: Long,
+        capabilities: CapabilitiesDto?,
+        serverVersion: ServerVersionDto?
+    ): Int = usersDao.updateCapabilities(UserCapabilitiesUpdate(id, capabilities, serverVersion))
+
+    override suspend fun updateExternalSignalingServer(
+        id: Long,
+        externalSignalingServer: ExternalSignalingServer?
+    ): Int = usersDao.updateExternalSignalingServer(UserExternalSignalingServerUpdate(id, externalSignalingServer))
+
+    override suspend fun updateDisplayName(id: Long, displayName: String?): Int =
+        usersDao.updateDisplayName(UserDisplayNameUpdate(id, displayName))
+
+    override suspend fun updateClientCertificate(id: Long, clientCertificate: String?): Int =
+        usersDao.updateClientCertificate(UserClientCertificateUpdate(id, clientCertificate))
+
+    override suspend fun updateCredentials(id: Long, token: String?, clientCertificate: String?): Int =
+        usersDao.updateCredentials(UserCredentialsUpdate(id, token, clientCertificate))
 
     companion object {
         private val TAG = UsersRepositoryImpl::class.simpleName

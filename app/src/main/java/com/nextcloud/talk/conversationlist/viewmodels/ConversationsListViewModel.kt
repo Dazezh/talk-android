@@ -8,6 +8,7 @@ package com.nextcloud.talk.conversationlist.viewmodels
 
 import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -21,16 +22,17 @@ import com.nextcloud.talk.conversationlist.ui.ConversationListEntry
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.invitation.data.InvitationsModel
 import com.nextcloud.talk.invitation.data.InvitationsRepository
+import com.nextcloud.talk.jobs.ConversationActionScheduler
+import com.nextcloud.talk.jobs.ConversationActionWorker.ConversationAction
 import com.nextcloud.talk.logger.Logger
 import com.nextcloud.talk.messagesearch.MessageSearchHelper
 import com.nextcloud.talk.messagesearch.MessageSearchHelper.MessageSearchResults
 import com.nextcloud.talk.models.domain.ConversationModel
-import com.nextcloud.talk.models.json.conversations.Conversation
+import com.nextcloud.talk.models.json.conversations.ConversationDto
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
 import com.nextcloud.talk.models.json.converters.EnumActorTypeConverter
-import com.nextcloud.talk.models.json.participants.Participant
+import com.nextcloud.talk.models.json.participants.ParticipantDto
 import com.nextcloud.talk.openconversations.data.OpenConversationsRepository
-import com.nextcloud.talk.repositories.conversations.ConversationsRepository
 import com.nextcloud.talk.repositories.unifiedsearch.UnifiedSearchRepository
 import com.nextcloud.talk.threadsoverview.data.ThreadsRepository
 import com.nextcloud.talk.ui.dialog.FilterConversationFragment.Companion.ARCHIVE
@@ -42,13 +44,15 @@ import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil.hasSpreedFeatureCapability
 import com.nextcloud.talk.utils.SpreedFeatures
 import com.nextcloud.talk.utils.UserIdUtils
-import com.nextcloud.talk.utils.database.user.CurrentUserProviderOld
-import com.nextcloud.talk.utils.withRetry
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import io.reactivex.Observer
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +61,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
@@ -66,27 +71,24 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
 
-@Suppress("LongParameterList", "TooManyFunctions")
-class ConversationsListViewModel @Inject constructor(
+@Suppress("LongParameterList", "TooManyFunctions", "LargeClass")
+class ConversationsListViewModel @AssistedInject constructor(
     private val repository: OfflineConversationsRepository,
     private val threadsRepository: ThreadsRepository,
-    private val currentUserProvider: CurrentUserProviderOld,
     private val openConversationsRepository: OpenConversationsRepository,
     private val contactsRepository: ContactsRepository,
     private val unifiedSearchRepository: UnifiedSearchRepository,
     private val invitationsRepository: InvitationsRepository,
     private val arbitraryStorageManager: ArbitraryStorageManager,
     var userManager: UserManager,
-    private val conversationsRepository: ConversationsRepository,
     private val conversationListUpdater: ConversationListUpdater,
-    private val logger: Logger
+    private val conversationActionScheduler: ConversationActionScheduler,
+    private val logger: Logger,
+    @Assisted val currentUser: User
 ) : ViewModel() {
 
-    private val _currentUser = currentUserProvider.currentUser.blockingGet()
-    val currentUser: User = _currentUser
-    val credentials = ApiUtils.getCredentials(_currentUser.username, _currentUser.token) ?: ""
+    val credentials = ApiUtils.getCredentials(currentUser.username, currentUser.token) ?: ""
 
     private val searchHelper = MessageSearchHelper(unifiedSearchRepository, currentUser)
 
@@ -103,7 +105,7 @@ class ConversationsListViewModel @Inject constructor(
 
     sealed class OpenConversationsUiState {
         data object None : OpenConversationsUiState()
-        data class Success(val conversations: List<Conversation>) : OpenConversationsUiState()
+        data class Success(val conversations: List<ConversationDto>) : OpenConversationsUiState()
         data class Error(val exception: Throwable) : OpenConversationsUiState()
     }
 
@@ -145,7 +147,7 @@ class ConversationsListViewModel @Inject constructor(
     val getRoomsViewState: LiveData<ViewState>
         get() = _getRoomsViewState
 
-    val getRoomsFlow = repository.roomListFlow
+    val getRoomsFlow = repository.roomListFlow(currentUser.id!!)
         .onEach { list ->
             _getRoomsViewState.value = GetRoomsSuccessState(list.isNotEmpty())
         }.catch {
@@ -154,20 +156,31 @@ class ConversationsListViewModel @Inject constructor(
 
     init {
         repository.syncErrorFlow
-            .onEach { throwable -> _getRoomsViewState.value = GetRoomsErrorState(throwable) }
+            // e.g. the sync of the account shown before switching to this one
+            .filter { syncError -> syncError.accountId == currentUser.id }
+            .onEach { syncError -> _getRoomsViewState.value = GetRoomsErrorState(syncError.throwable) }
             .launchIn(viewModelScope)
     }
 
     private val _isLoadingRooms = MutableStateFlow(true)
 
     /**
-     * True while a [getRooms] call is in progress (from start until the fetch-Job completes,
-     * i.e. after both the local-DB and the network-sync emissions have been produced).
+     * Number of [getRooms] jobs that have not completed yet. Guarded by [roomSyncsLock], together
+     * with the matching update of [_isLoadingRooms]: [getRooms] is also called off the main thread,
+     * from a background event subscriber.
+     */
+    private var roomSyncsInFlight = 0
+    private val roomSyncsLock = Any()
+
+    /**
+     * True while any [getRooms] call is in progress (from start until the last overlapping
+     * fetch-Job completes, i.e. after both the local-DB and the network-sync emissions have been
+     * produced).
      */
     val isLoadingRooms: StateFlow<Boolean> = _isLoadingRooms.asStateFlow()
 
     val getRoomsStateFlow = repository
-        .roomListFlow
+        .roomListFlow(currentUser.id!!)
         .catch { throwable ->
             Log.e(TAG, "Error observing the conversation list", throwable)
             _getRoomsViewState.value = GetRoomsErrorState(throwable)
@@ -243,10 +256,10 @@ class ConversationsListViewModel @Inject constructor(
 
     private val hideRoomToken = MutableStateFlow<String?>(null)
 
-    /** Tokens of rooms being left; hidden optimistically while the leave-undo snackbar is showing. */
-    private val pendingLeaveTokens = MutableStateFlow<Set<String>>(emptySet())
+    /** Tokens of rooms being left or deleted; hidden optimistically until the request finished. */
+    private val pendingRemovalTokens = MutableStateFlow<Set<String>>(emptySet())
 
-    private val excludedRoomTokens = combine(hideRoomToken, pendingLeaveTokens) { hideToken, pendingTokens ->
+    private val excludedRoomTokens = combine(hideRoomToken, pendingRemovalTokens) { hideToken, pendingTokens ->
         if (hideToken != null) pendingTokens + hideToken else pendingTokens
     }
 
@@ -388,25 +401,27 @@ class ConversationsListViewModel @Inject constructor(
         hideRoomToken.value = token
     }
 
-    /** Optimistically hide a room while its leave-undo snackbar is showing. */
-    fun markConversationPendingLeave(token: String) {
-        pendingLeaveTokens.value = pendingLeaveTokens.value + token
+    /** Optimistically hide a room that is being left or deleted. */
+    fun markConversationPendingRemoval(token: String) {
+        pendingRemovalTokens.value = pendingRemovalTokens.value + token
     }
 
-    /** Un-hide a room, either because the leave was undone or because it finished/failed. */
-    fun clearConversationPendingLeave(token: String) {
-        pendingLeaveTokens.value = pendingLeaveTokens.value - token
+    /** Un-hide a room, either because the removal was undone or because it finished or failed. */
+    fun clearConversationPendingRemoval(token: String) {
+        pendingRemovalTokens.value = pendingRemovalTokens.value - token
     }
 
     fun getFederationInvitations() {
         _federationInvitationHintVisible.value = false
         _showAvatarBadge.value = false
 
-        userManager.users.blockingGet()?.forEach {
-            invitationsRepository.fetchInvitations(it)
-                .subscribeOn(Schedulers.io())
-                ?.observeOn(AndroidSchedulers.mainThread())
-                ?.subscribe(FederatedInvitationsObserver())
+        viewModelScope.launch {
+            userManager.getUsers().forEach {
+                invitationsRepository.fetchInvitations(it)
+                    .subscribeOn(Schedulers.io())
+                    ?.observeOn(AndroidSchedulers.mainThread())
+                    ?.subscribe(FederatedInvitationsObserver())
+            }
         }
     }
 
@@ -475,7 +490,7 @@ class ConversationsListViewModel @Inject constructor(
                     entries.add(ConversationListEntry.Header(usersTitle))
                     sortedByMatchQuality(contacts, { it.label }, filter, wordPattern)
                         .forEach { autocompleteUser ->
-                            val participant = Participant()
+                            val participant = ParticipantDto()
                             participant.actorId = autocompleteUser.id
                             participant.actorType = actorTypeConverter.getFromString(autocompleteUser.source)
                             participant.displayName = autocompleteUser.label
@@ -561,20 +576,84 @@ class ConversationsListViewModel @Inject constructor(
         }
     }
 
-    fun getRooms(user: User) {
+    /**
+     * Refreshes the conversation list, unless a room list sync is already running, a search is
+     * open, or the sync would fetch the whole list without the refresh cadence calling for it.
+     *
+     * The in-flight check covers the room list request only: [getRooms] completes once the list is
+     * stored and leaves the message catch-up running, so a tick can start while messages of the
+     * previous one are still being fetched. That is deliberate - the list is what this refreshes.
+     *
+     * Whether a sync is due is read from stored state, and a read that fails must not take the
+     * refresh loop with it: this runs every tick for as long as the screen is open, and an
+     * exception would escape the loop's scope rather than skip one refresh. That read suspends, so
+     * it is done before the other checks: a sync or a search started while it runs is still seen.
+     */
+    suspend fun refreshRoomsIfIdle(user: User) {
+        val syncDue = isPeriodicSyncDue(user)
+        when {
+            _isLoadingRooms.value ->
+                Log.d(TAG, "Foreground refresh skipped: a room list sync is already in flight")
+
+            _isSearchActiveFlow.value ->
+                Log.d(TAG, "Foreground refresh skipped: a search is active")
+
+            !syncDue ->
+                Log.d(TAG, "Foreground refresh skipped: no delta available and no full sync due")
+
+            else -> getRooms(user)
+        }
+    }
+
+    /** Whether the cadence calls for a sync, treating a failed read of the stored state as yes. */
+    private suspend fun isPeriodicSyncDue(user: User): Boolean =
+        runCatching { repository.isPeriodicSyncDue(user) }.getOrElse { throwable ->
+            if (throwable is CancellationException) throw throwable
+            Log.w(TAG, "Could not read when the last sync was, refreshing anyway", throwable)
+            true
+        }
+
+    fun getRooms(user: User, forceFullSync: Boolean = false): Job {
         val startNanoTime = System.nanoTime()
         Log.d(TAG, "fetchData - getRooms - calling: $startNanoTime")
-        _isLoadingRooms.value = true
-        val job = repository.getRooms(user)
+        val job = repository.getRooms(user, forceFullSync)
+        // overlapping syncs (resume, pull to refresh, a refresh tick) must not end the loading
+        // state while another one is still running, or pull to refresh stops spinning too early
+        synchronized(roomSyncsLock) {
+            roomSyncsInFlight++
+            _isLoadingRooms.value = true
+        }
+        viewModelScope.launch {
+            try {
+                job.join()
+            } finally {
+                synchronized(roomSyncsLock) {
+                    roomSyncsInFlight--
+                    if (roomSyncsInFlight == 0) {
+                        _isLoadingRooms.value = false
+                    }
+                }
+            }
+        }
+        return job
+    }
+
+    /**
+     * Keeps a conversation the user left or deleted out of the list until the sync that drops it for
+     * good has landed, so it cannot flash back in between the request succeeding and the list
+     * catching up.
+     */
+    fun onConversationRemoved(user: User, token: String) {
+        val job = getRooms(user, forceFullSync = true)
         viewModelScope.launch {
             job.join()
-            _isLoadingRooms.value = false
+            clearConversationPendingRemoval(token)
         }
     }
 
     fun checkIfThreadsExist() {
         val limitForFollowedThreadsExistenceCheck = 1
-        val accountId = UserIdUtils.getIdForUser(currentUserProvider.currentUser.blockingGet())
+        val accountId = UserIdUtils.getIdForUser(currentUser)
 
         fun isLastCheckTooOld(lastCheckDate: Long): Boolean {
             val currentTimeMillis = System.currentTimeMillis()
@@ -779,67 +858,6 @@ class ConversationsListViewModel @Inject constructor(
         _readUnreadState.value = ConversationReadUnreadUiState.None
     }
 
-    @Suppress("Detekt.TooGenericExceptionCaught")
-    fun markConversationAsRead(conversation: ConversationModel) {
-        val original = conversation.copy()
-        val optimistic = conversation.copy(unreadMessages = 0, unreadMention = false, unreadMentionDirect = false)
-        val messageId = if (conversation.remoteServer.isNullOrEmpty()) conversation.lastMessage?.id?.toInt() else null
-        val apiVersion = ApiUtils.getChatApiVersion(
-            currentUser.capabilities?.spreedCapability!!,
-            intArrayOf(ApiUtils.API_V1)
-        )
-        val url = ApiUtils.getUrlForChatReadMarker(apiVersion, currentUser.baseUrl, conversation.token)
-        viewModelScope.launch {
-            messageId?.let { conversationListUpdater.markPendingReadMarker(conversation.internalId, it) }
-            withContext(Dispatchers.IO) {
-                repository.updateConversation(optimistic)
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    withRetry(1) { conversationsRepository.markConversationAsRead(credentials, url, messageId) }
-                }
-                _readUnreadState.value = ConversationReadUnreadUiState.Success
-            } catch (e: Exception) {
-                logger.e(TAG, "Failed to mark conversation as read", e)
-                messageId?.let { conversationListUpdater.clearPendingReadMarker(conversation.internalId, it) }
-                withContext(Dispatchers.IO) {
-                    repository.updateConversation(original)
-                }
-                _readUnreadState.value = ConversationReadUnreadUiState.Error
-            }
-        }
-    }
-
-    @Suppress("Detekt.TooGenericExceptionCaught")
-    fun markConversationAsUnread(conversation: ConversationModel) {
-        val original = conversation.copy()
-        val optimistic = conversation.copy(unreadMessages = 1)
-        val apiVersion = ApiUtils.getChatApiVersion(
-            currentUser.capabilities?.spreedCapability!!,
-            intArrayOf(ApiUtils.API_V1)
-        )
-        val url = ApiUtils.getUrlForChatReadMarker(apiVersion, currentUser.baseUrl, conversation.token)
-        viewModelScope.launch {
-            conversationListUpdater.markPendingUnread(conversation.internalId)
-            withContext(Dispatchers.IO) {
-                repository.updateConversation(optimistic)
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    withRetry(1) { conversationsRepository.markConversationAsUnread(credentials, url) }
-                }
-                _readUnreadState.value = ConversationReadUnreadUiState.Success
-            } catch (e: Exception) {
-                logger.e(TAG, "Failed to mark conversation as unread", e)
-                conversationListUpdater.clearPendingUnread(conversation.internalId)
-                withContext(Dispatchers.IO) {
-                    repository.updateConversation(original)
-                }
-                _readUnreadState.value = ConversationReadUnreadUiState.Error
-            }
-        }
-    }
-
     fun resetFavoriteState() {
         _favoriteState.value = FavoriteUiState.None
     }
@@ -848,92 +866,126 @@ class ConversationsListViewModel @Inject constructor(
         _archiveState.value = ArchiveUiState.None
     }
 
-    @Suppress("Detekt.TooGenericExceptionCaught")
+    fun markConversationAsRead(conversation: ConversationModel) {
+        // a federated conversation sends no message id, so the server marks it read up to its last message
+        val lastReadMessage =
+            if (conversation.remoteServer.isNullOrEmpty()) conversation.lastMessage?.id?.toInt() else null
+        applyAndSend(
+            action = ConversationAction.MarkRead(lastReadMessage),
+            original = conversation,
+            optimistic = conversation.copy(unreadMessages = 0, unreadMention = false, unreadMentionDirect = false),
+            onApplied = { _readUnreadState.value = ConversationReadUnreadUiState.Success },
+            onFailed = { _readUnreadState.value = ConversationReadUnreadUiState.Error }
+        )
+    }
+
+    fun markConversationAsUnread(conversation: ConversationModel) {
+        applyAndSend(
+            action = ConversationAction.MarkUnread,
+            original = conversation,
+            optimistic = conversation.copy(unreadMessages = 1),
+            onApplied = { _readUnreadState.value = ConversationReadUnreadUiState.Success },
+            onFailed = { _readUnreadState.value = ConversationReadUnreadUiState.Error }
+        )
+    }
+
     fun toggleConversationArchive(conversation: ConversationModel) {
-        val original = conversation.copy()
         val desiredArchived = !conversation.hasArchived
-        val optimistic = conversation.copy(hasArchived = desiredArchived)
-        val apiVersion = ApiUtils.getConversationApiVersion(currentUser, intArrayOf(ApiUtils.API_V4, ApiUtils.API_V1))
-        val url = ApiUtils.getUrlForArchive(apiVersion, currentUser.baseUrl, conversation.token)
-        viewModelScope.launch {
-            conversationListUpdater.markPendingArchived(conversation.internalId, desiredArchived)
-            withContext(Dispatchers.IO) {
-                repository.updateConversation(optimistic)
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    withRetry(1) {
-                        if (desiredArchived) {
-                            conversationsRepository.archiveConversation(credentials, url)
-                        } else {
-                            conversationsRepository.unarchiveConversation(credentials, url)
-                        }
-                    }
-                }
-                _archiveState.value = ArchiveUiState.Success(desiredArchived, conversation.displayName)
-            } catch (e: Exception) {
-                logger.e(TAG, "Failed to toggle conversation archive state", e)
-                conversationListUpdater.clearPendingArchived(conversation.internalId, desiredArchived)
-                withContext(Dispatchers.IO) {
-                    repository.updateConversation(original)
-                }
-                _archiveState.value = ArchiveUiState.Error
-            }
-        }
+        applyAndSend(
+            action = ConversationAction.Archive(desiredArchived),
+            original = conversation,
+            optimistic = conversation.copy(hasArchived = desiredArchived),
+            onApplied = { _archiveState.value = ArchiveUiState.Success(desiredArchived, conversation.displayName) },
+            onFailed = { _archiveState.value = ArchiveUiState.Error }
+        )
     }
 
-    @Suppress("Detekt.TooGenericExceptionCaught")
     fun addConversationToFavorites(conversation: ConversationModel) {
-        val original = conversation.copy()
-        val optimistic = conversation.copy(favorite = true)
-        val apiVersion = ApiUtils.getConversationApiVersion(currentUser, intArrayOf(ApiUtils.API_V4, ApiUtils.API_V1))
-        val url = ApiUtils.getUrlForRoomFavorite(apiVersion, currentUser.baseUrl, conversation.token)
+        setFavorite(conversation, favorite = true)
+    }
+
+    fun removeConversationFromFavorites(conversation: ConversationModel) {
+        setFavorite(conversation, favorite = false)
+    }
+
+    private fun setFavorite(conversation: ConversationModel, favorite: Boolean) {
+        applyAndSend(
+            action = ConversationAction.Favorite(favorite),
+            original = conversation,
+            optimistic = conversation.copy(favorite = favorite),
+            onApplied = { _favoriteState.value = FavoriteUiState.Success },
+            onFailed = { _favoriteState.value = FavoriteUiState.Error }
+        )
+    }
+
+    /**
+     * Sends [action] through [ConversationActionScheduler] and shows [optimistic] meanwhile.
+     *
+     * - The guard is set first, so a worker that is done at once finds it to release.
+     * - The work is enqueued outside [viewModelScope], so leaving the screen cannot keep it from being sent.
+     * - Showing the change and waiting only happen while the screen is there. If the worker gives up, [original]
+     *   is put back and [onFailed] is called; if the screen is gone by then, the next sync restores it instead.
+     */
+    private fun applyAndSend(
+        action: ConversationAction,
+        original: ConversationModel,
+        optimistic: ConversationModel,
+        onApplied: () -> Unit,
+        onFailed: () -> Unit
+    ) {
+        markPending(original.internalId, action)
+        val workId = conversationActionScheduler.enqueue(currentUser.id!!, original.token, action)
+
         viewModelScope.launch {
-            conversationListUpdater.markPendingFavorite(conversation.internalId, favorite = true)
-            withContext(Dispatchers.IO) {
-                repository.updateConversation(optimistic)
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    withRetry(1) { conversationsRepository.addConversationToFavorites(credentials, url) }
-                }
-                _favoriteState.value = FavoriteUiState.Success
-            } catch (e: Exception) {
-                logger.e(TAG, "Failed to add conversation to favorites", e)
-                conversationListUpdater.clearPendingFavorite(conversation.internalId, favorite = true)
-                withContext(Dispatchers.IO) {
-                    repository.updateConversation(original)
-                }
-                _favoriteState.value = FavoriteUiState.Error
+            applyLocally(optimistic)
+            onApplied()
+
+            if (conversationActionScheduler.awaitWorkerGaveUp(workId)) {
+                logger.e(TAG, "Failed to send $action for a conversation")
+                restore(original, action)
+                onFailed()
             }
         }
     }
 
-    @Suppress("Detekt.TooGenericExceptionCaught")
-    fun removeConversationFromFavorites(conversation: ConversationModel) {
-        val original = conversation.copy()
-        val optimistic = conversation.copy(favorite = false)
-        val apiVersion = ApiUtils.getConversationApiVersion(currentUser, intArrayOf(ApiUtils.API_V4, ApiUtils.API_V1))
-        val url = ApiUtils.getUrlForRoomFavorite(apiVersion, currentUser.baseUrl, conversation.token)
-        viewModelScope.launch {
-            conversationListUpdater.markPendingFavorite(conversation.internalId, favorite = false)
-            withContext(Dispatchers.IO) {
-                repository.updateConversation(optimistic)
-            }
-            try {
-                withContext(Dispatchers.IO) {
-                    withRetry(1) { conversationsRepository.removeConversationFromFavorites(credentials, url) }
-                }
-                _favoriteState.value = FavoriteUiState.Success
-            } catch (e: Exception) {
-                logger.e(TAG, "Failed to remove conversation from favorites", e)
-                conversationListUpdater.clearPendingFavorite(conversation.internalId, favorite = false)
-                withContext(Dispatchers.IO) {
-                    repository.updateConversation(original)
-                }
-                _favoriteState.value = FavoriteUiState.Error
-            }
+    /** Sets the guard for [action]; the worker releases it once the change went through or failed. */
+    private fun markPending(internalConversationId: String, action: ConversationAction) {
+        when (action) {
+            is ConversationAction.MarkRead ->
+                conversationListUpdater.switchToPendingMarkAsRead(internalConversationId, action.lastReadMessage)
+            ConversationAction.MarkUnread ->
+                conversationListUpdater.switchToPendingMarkAsUnread(internalConversationId)
+            is ConversationAction.Favorite ->
+                conversationListUpdater.markPendingFavorite(internalConversationId, action.favorite)
+            is ConversationAction.Archive ->
+                conversationListUpdater.markPendingArchived(internalConversationId, action.archived)
         }
+    }
+
+    private suspend fun applyLocally(conversation: ConversationModel) {
+        withContext(Dispatchers.IO) { repository.updateConversation(conversation) }
+    }
+
+    /**
+     * Puts back only the field [action] owns, on top of whatever the entry holds by now. Each action is
+     * carried by its own work, so writing the whole captured conversation back would undo a different
+     * action that succeeded while this one was still in flight.
+     */
+    @VisibleForTesting
+    internal suspend fun restore(original: ConversationModel, action: ConversationAction) {
+        val current = repository.getLocallyStoredConversation(currentUser, original.token) ?: original
+        applyLocally(
+            when (action) {
+                is ConversationAction.MarkRead -> current.copy(
+                    unreadMessages = original.unreadMessages,
+                    unreadMention = original.unreadMention,
+                    unreadMentionDirect = original.unreadMentionDirect
+                )
+                ConversationAction.MarkUnread -> current.copy(unreadMessages = original.unreadMessages)
+                is ConversationAction.Favorite -> current.copy(favorite = original.favorite)
+                is ConversationAction.Archive -> current.copy(hasArchived = original.hasArchived)
+            }
+        )
     }
 
     inner class FederatedInvitationsObserver : Observer<InvitationsModel> {
@@ -942,8 +994,6 @@ class ConversationsListViewModel @Inject constructor(
         }
 
         override fun onNext(invitationsModel: InvitationsModel) {
-            val currentUser = currentUserProvider.currentUser.blockingGet()
-
             if (invitationsModel.user.userId?.equals(currentUser.userId) == true &&
                 invitationsModel.user.baseUrl?.equals(currentUser.baseUrl) == true
             ) {
@@ -962,6 +1012,11 @@ class ConversationsListViewModel @Inject constructor(
         override fun onComplete() {
             // unused atm
         }
+    }
+
+    @AssistedFactory
+    interface Factory {
+        fun build(user: User): ConversationsListViewModel
     }
 
     companion object {

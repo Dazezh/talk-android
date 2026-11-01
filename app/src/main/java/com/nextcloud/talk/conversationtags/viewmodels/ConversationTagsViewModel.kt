@@ -17,12 +17,14 @@ import com.nextcloud.talk.conversationtags.data.ConversationTagsRepository
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.logger.Logger
 import com.nextcloud.talk.models.domain.ConversationModel
-import com.nextcloud.talk.models.json.tags.ConversationTag
+import com.nextcloud.talk.models.json.tags.ConversationTagDto
 import com.nextcloud.talk.models.json.tags.ConversationTagErrorOverall
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil.hasSpreedFeatureCapability
 import com.nextcloud.talk.utils.SpreedFeatures
-import com.nextcloud.talk.utils.database.user.CurrentUserProviderOld
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,22 +32,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
-import javax.inject.Inject
 
 @Suppress("TooManyFunctions")
-class ConversationTagsViewModel @Inject constructor(
+class ConversationTagsViewModel @AssistedInject constructor(
     private val conversationTagsRepository: ConversationTagsRepository,
     private val repository: OfflineConversationsRepository,
-    private val currentUserProvider: CurrentUserProviderOld,
     private val conversationListUpdater: ConversationListUpdater,
-    private val logger: Logger
+    private val logger: Logger,
+    @Assisted private val currentUser: User
 ) : ViewModel() {
 
-    private val currentUser: User = currentUserProvider.currentUser.blockingGet()
     private val credentials = ApiUtils.getCredentials(currentUser.username, currentUser.token) ?: ""
 
-    private val _conversationTagsFlow = MutableStateFlow<List<ConversationTag>>(emptyList())
-    val conversationTagsFlow: StateFlow<List<ConversationTag>> = _conversationTagsFlow.asStateFlow()
+    private val _conversationTagsFlow = MutableStateFlow<List<ConversationTagDto>>(emptyList())
+    val conversationTagsFlow: StateFlow<List<ConversationTagDto>> = _conversationTagsFlow.asStateFlow()
 
     sealed class TagActionUiState {
         data object None : TagActionUiState()
@@ -212,11 +212,16 @@ class ConversationTagsViewModel @Inject constructor(
     }
 
     private fun isCustomTag(tagId: String): Boolean =
-        _conversationTagsFlow.value.firstOrNull { it.id == tagId }?.type == ConversationTag.TYPE_CUSTOM
+        _conversationTagsFlow.value.firstOrNull { it.id == tagId }?.type == ConversationTagDto.TYPE_CUSTOM
 
     /** Drops the built-in "Other" tag (not surfaced in this UI) and sorts the rest by sortOrder. */
-    private fun List<ConversationTag>?.toDisplayTags(): List<ConversationTag> =
-        this?.filter { it.type != ConversationTag.TYPE_OTHER }?.sortedBy { it.sortOrder } ?: emptyList()
+    private fun List<ConversationTagDto>?.toDisplayTags(): List<ConversationTagDto> =
+        this?.filter { it.type != ConversationTagDto.TYPE_OTHER }?.sortedBy { it.sortOrder } ?: emptyList()
+
+    @AssistedFactory
+    interface Factory {
+        fun build(user: User): ConversationTagsViewModel
+    }
 
     companion object {
         private val TAG = ConversationTagsViewModel::class.java.simpleName

@@ -20,6 +20,7 @@ import android.text.TextWatcher
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.MotionEvent
@@ -72,10 +73,10 @@ import com.nextcloud.talk.chat.viewmodels.MessageInputViewModel
 import com.nextcloud.talk.data.network.NetworkMonitor
 import com.nextcloud.talk.databinding.FragmentMessageInputBinding
 import com.nextcloud.talk.jobs.UploadAndShareFilesWorker
-import com.nextcloud.talk.models.json.capabilities.SpreedCapability
+import com.nextcloud.talk.models.json.capabilities.SpreedCapabilityDto
 import com.nextcloud.talk.models.json.chat.ChatUtils
-import com.nextcloud.talk.models.json.mention.Mention
-import com.nextcloud.talk.models.json.signaling.NCSignalingMessage
+import com.nextcloud.talk.models.json.mention.MentionDto
+import com.nextcloud.talk.models.json.signaling.NCSignalingMessageDto
 import com.nextcloud.talk.presenters.MentionAutocompletePresenter
 import com.nextcloud.talk.stickers.data.StickerImageLoader
 import com.nextcloud.talk.stickers.ui.LocalStickerImageLoader
@@ -88,6 +89,7 @@ import com.nextcloud.talk.ui.CallStartedBanner
 import com.nextcloud.talk.ui.MicInputCloud
 import com.nextcloud.talk.ui.dialog.AttachmentDialog
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
+import com.nextcloud.talk.ui.theme.hostViewThemeUtils
 import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
@@ -127,6 +129,8 @@ class MessageInputFragment : Fragment() {
     @Inject
     lateinit var dateUtils: DateUtils
 
+    private enum class KeyboardSendTarget { NONE, EDIT, THREAD, SEND }
+
     @Inject
     lateinit var viewModelFactory: ViewModelProvider.Factory
 
@@ -148,7 +152,7 @@ class MessageInputFragment : Fragment() {
     private var xcounter = 0f
     private var ycounter = 0f
     private var hasScheduledMessages = false
-    private lateinit var spreedCapabilities: SpreedCapability
+    private lateinit var spreedCapabilities: SpreedCapabilityDto
     private var hasSharedText = false
 
     private var lastQuotedJsonId: Int? = null
@@ -159,14 +163,12 @@ class MessageInputFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedApplication!!.componentApplication.inject(this)
+        viewThemeUtils = hostViewThemeUtils(activity, viewThemeUtils)
         conversationInternalId = arguments?.getString(ChatActivity.CONVERSATION_INTERNAL_ID).orEmpty()
         chatActivity = requireActivity() as ChatActivity
-        val sharedText = arguments?.getString(BundleKeys.KEY_SHARED_TEXT).orEmpty()
-        if (sharedText.isNotEmpty()) {
-            hasSharedText = true
-            chatActivity.chatViewModel.messageDraft.messageText = sharedText
-            chatActivity.chatViewModel.saveMessageDraft()
-        }
+        // The shared text itself is put into the draft by ChatActivity. This fragment may be restored before
+        // ChatActivity has created its view model, so it must not access it here.
+        hasSharedText = arguments?.getString(BundleKeys.KEY_SHARED_TEXT).orEmpty().isNotEmpty()
         if (conversationInternalId.isEmpty()) {
             Log.e(TAG, "internalId for conversation passed to MessageInputFragment is empty")
         }
@@ -365,7 +367,7 @@ class MessageInputFragment : Fragment() {
         }
     }
 
-    private fun setReactionsOnly(spreedCapabilities: SpreedCapability) {
+    private fun setReactionsOnly(spreedCapabilities: SpreedCapabilityDto) {
         val isReactionOnly = isReactionOnlyMode(spreedCapabilities)
         if (isReactionOnly) {
             binding.fragmentMessageInputView.setVisible(false)
@@ -443,7 +445,7 @@ class MessageInputFragment : Fragment() {
     }
 
     @Suppress("LongMethod")
-    private fun initMessageInputView(spreedCapabilities: SpreedCapability) {
+    private fun initMessageInputView(spreedCapabilities: SpreedCapabilityDto) {
         if (!chatActivity.active) return
         this.spreedCapabilities = spreedCapabilities
 
@@ -541,6 +543,33 @@ class MessageInputFragment : Fragment() {
 
         binding.fragmentMessageInputView.button?.setOnClickListener {
             submitMessage(false)
+        }
+
+        binding.fragmentMessageInputView.inputEditText.setOnKeyListener { _, keyCode, event ->
+            val target = resolveKeyboardSendTarget(
+                keyCode = keyCode,
+                action = event.action,
+                isCtrlPressed = event.isCtrlPressed,
+                isEditButtonVisible = binding.fragmentEditView.editMessageView.isVisible,
+                isThreadButtonVisible = binding.fragmentMessageInputView.submitThreadButton.isVisible,
+                isThreadButtonEnabled = binding.fragmentMessageInputView.submitThreadButton.isEnabled,
+                isSendButtonVisible = binding.fragmentMessageInputView.messageSendButton.isVisible
+            )
+            when (target) {
+                KeyboardSendTarget.EDIT -> {
+                    binding.fragmentMessageInputView.editMessageButton.performClick()
+                    true
+                }
+                KeyboardSendTarget.THREAD -> {
+                    binding.fragmentMessageInputView.submitThreadButton.performClick()
+                    true
+                }
+                KeyboardSendTarget.SEND -> {
+                    binding.fragmentMessageInputView.button.performClick()
+                    true
+                }
+                KeyboardSendTarget.NONE -> false
+            }
         }
 
         binding.fragmentMessageInputView.editMessageButton.setOnClickListener {
@@ -782,6 +811,7 @@ class MessageInputFragment : Fragment() {
             val backgroundDrawable = it.getColor(R.color.bg_default, null).toDrawable()
             val presenter = MentionAutocompletePresenter(
                 requireContext(),
+                chatActivity.conversationUser,
                 chatActivity.roomToken,
                 chatActivity.chatApiVersion
             )
@@ -794,7 +824,7 @@ class MessageInputFragment : Fragment() {
 
             if (mentionAutocomplete == null && binding.fragmentMessageInputView.inputEditText != null) {
                 mentionAutocomplete =
-                    Autocomplete.on<Mention>(binding.fragmentMessageInputView.inputEditText)
+                    Autocomplete.on<MentionDto>(binding.fragmentMessageInputView.inputEditText)
                         .with(elevation)
                         .with(backgroundDrawable)
                         .with(CharPolicy('@'))
@@ -1083,7 +1113,7 @@ class MessageInputFragment : Fragment() {
             val concurrentSafeHashMap = chatActivity.webSocketInstance?.getUserMap()
             if (concurrentSafeHashMap != null) {
                 for ((sessionId, _) in concurrentSafeHashMap) {
-                    val ncSignalingMessage = NCSignalingMessage()
+                    val ncSignalingMessage = NCSignalingMessageDto()
                     ncSignalingMessage.to = sessionId
                     ncSignalingMessage.type = TYPING_STARTED_SIGNALING_MESSAGE_TYPE
                     chatActivity.signalingMessageSender!!.send(ncSignalingMessage)
@@ -1130,7 +1160,7 @@ class MessageInputFragment : Fragment() {
             val concurrentSafeHashMap = chatActivity.webSocketInstance?.getUserMap()
             if (concurrentSafeHashMap != null) {
                 for ((sessionId, _) in concurrentSafeHashMap) {
-                    val ncSignalingMessage = NCSignalingMessage()
+                    val ncSignalingMessage = NCSignalingMessageDto()
                     ncSignalingMessage.to = sessionId
                     ncSignalingMessage.type = TYPING_STOPPED_SIGNALING_MESSAGE_TYPE
                     chatActivity.signalingMessageSender?.send(ncSignalingMessage)
@@ -1180,12 +1210,8 @@ class MessageInputFragment : Fragment() {
         chatActivity.chatViewModel.onMessageSent()
 
         messageInputViewModel.sendChatMessage(
-            credentials = chatActivity.conversationUser!!.getCredentials(),
-            url = ApiUtils.getUrlForChat(
-                chatActivity.chatApiVersion,
-                chatActivity.conversationUser!!.baseUrl!!,
-                chatActivity.roomToken
-            ),
+            userId = chatActivity.conversationUser!!.id!!,
+            roomToken = chatActivity.roomToken,
             message = message,
             displayName = chatActivity.conversationUser!!.displayName ?: "",
             replyTo = chatActivity.getReplyToMessageId(),
@@ -1258,7 +1284,11 @@ class MessageInputFragment : Fragment() {
         popupMenu.show()
     }
 
-    private fun editMessageAPI(message: ChatMessage, editedMessageText: String, spreedCapabilities: SpreedCapability) {
+    private fun editMessageAPI(
+        message: ChatMessage,
+        editedMessageText: String,
+        spreedCapabilities: SpreedCapabilityDto
+    ) {
         // FIXME Fix API checking with guests?
         val apiVersion: Int = ApiUtils.getChatApiVersion(spreedCapabilities, intArrayOf(1))
 
@@ -1399,11 +1429,36 @@ class MessageInputFragment : Fragment() {
         lastQuotedJsonId = null
     }
 
-    private fun isReactionOnlyMode(spreedCapabilities: SpreedCapability): Boolean {
+    private fun isReactionOnlyMode(spreedCapabilities: SpreedCapabilityDto): Boolean {
         val conversation = chatActivity.currentConversation
         val permissions = chatActivity.participantPermissionsFlow.value
         val isChannel = ConversationUtils.isChannel(conversation, spreedCapabilities)
         return isChannel && permissions?.hasChatPermission() == false && permissions.hasReactPermission() == true
+    }
+
+    private fun resolveKeyboardSendTarget(
+        keyCode: Int,
+        action: Int,
+        isCtrlPressed: Boolean,
+        isEditButtonVisible: Boolean,
+        isThreadButtonVisible: Boolean,
+        isThreadButtonEnabled: Boolean,
+        isSendButtonVisible: Boolean
+    ): KeyboardSendTarget {
+        val isSendChord = action == KeyEvent.ACTION_DOWN &&
+            isCtrlPressed &&
+            (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)
+
+        if (!isSendChord) {
+            return KeyboardSendTarget.NONE
+        }
+
+        return when {
+            isEditButtonVisible -> KeyboardSendTarget.EDIT
+            isThreadButtonVisible && isThreadButtonEnabled -> KeyboardSendTarget.THREAD
+            isSendButtonVisible -> KeyboardSendTarget.SEND
+            else -> KeyboardSendTarget.NONE
+        }
     }
 
     companion object {

@@ -863,4 +863,30 @@
         <item quantity="one">%d röst</item>
         <item quantity="other">%d röster</item>
     </plurals>
+    <string name="nc_call_button_content_description_switch_camera">Växla kamera</string>
+    
+    <string name="nc_call_ongoing_notification_return_action">Återgå till samtalet</string>
+    
+    <string name="nc_login_too_many_attempts">För många misslyckade inloggningsförsök från det här nätverket. Försök igen senare.</string>
+    
+    <string name="nc_logs_share_no_app_found">Ingen app hittades för att skicka rapporten.</string>
+    
+    <string name="nc_message_not_added_to_notes">Kunde inte lägga till meddelandet i anteckningar</string>
+    
+    <string name="nc_notification_channel_calls_ongoing">Pågående samtal</string>
+    
+    <string name="nc_notification_channel_calls_ongoing_description">Visar status så länge samtalet pågår</string>
+    
+    <string name="nc_notification_permission_hint">Bevilja behörigheten ”Aviseringar” för att visa samtalsaviseringar och hålla samtal aktiva i bakgrunden.</string>
+    
+    <string name="nc_reauthorize_different_account">Du loggade in med ett annat konto. Logga in med det konto som du vill godkänna på nytt.</string>
+    
+    <string name="play_pause_audio_file">Spela upp/pausa ljudfil</string>
+    
+    <string name="reaction_add_failed">Det gick inte att lägga till reaktionen</string>
+    
+    <string name="reaction_delete_failed">Det gick inte att ta bort reaktionen</string>
+    
+    <string name="thread">Tråd</string>
+    
 </resources>

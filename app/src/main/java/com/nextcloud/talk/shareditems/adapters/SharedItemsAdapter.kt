@@ -11,6 +11,7 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import com.nextcloud.talk.chat.ChatActivity
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.databinding.SharedItemGridBinding
 import com.nextcloud.talk.databinding.SharedItemListBinding
@@ -29,6 +30,7 @@ import com.nextcloud.talk.shareditems.model.SharedPinnedItem
 import com.nextcloud.talk.shareditems.model.SharedPollItem
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
 import com.nextcloud.talk.utils.ApiUtils
+import com.nextcloud.talk.utils.bundle.BundleKeys
 import java.util.Collections.emptyList
 
 class SharedItemsAdapter(
@@ -68,7 +70,7 @@ class SharedItemsAdapter(
     override fun onBindViewHolder(holder: SharedItemsViewHolder, position: Int) {
         when (val item = items[position]) {
             is SharedPollItem -> holder.onBind(item, ::showPoll)
-            is SharedFileItem -> holder.onBind(item, ::openMediaViewer)
+            is SharedFileItem -> holder.onBind(item, ::openMediaViewer, ::openInChat)
             is SharedLocationItem -> holder.onBind(item)
             is SharedOtherItem -> holder.onBind(item)
             is SharedDeckCardItem -> holder.onBind(item)
@@ -122,15 +124,21 @@ class SharedItemsAdapter(
             .sortedBy { it.messageId }
             .map { it.toMediaViewerItem() }
             .capSeedAroundMessage(item.messageId)
-        context.startActivity(MediaViewerActivity.newIntent(context, roomToken, seedItems, item.messageId))
+        context.startActivity(
+            MediaViewerActivity.newIntent(context, user.id!!, roomToken, seedItems, item.messageId)
+        )
+    }
+
+    private fun openInChat(item: SharedFileItem, context: Context) {
+        val intent = ChatActivity.createIntent(context, user.id!!, roomToken).apply {
+            putExtra(BundleKeys.KEY_MESSAGE_ID, item.messageId)
+        }
+        context.startActivity(intent)
     }
 
     private fun openMessage(item: SharedItem, context: Context) {
-        val credentials = ApiUtils.getCredentials(user.username, user.token)
-        val baseUrl = user.baseUrl
         (context as SharedItemsActivity).startContextChatWindowForMessage(
-            credentials,
-            baseUrl,
+            user,
             roomToken,
             item.id,
             null

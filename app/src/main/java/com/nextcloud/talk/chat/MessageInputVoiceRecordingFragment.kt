@@ -27,6 +27,7 @@ import com.nextcloud.talk.chat.data.io.AudioFocusRequestManager
 import com.nextcloud.talk.chat.viewmodels.MessageInputViewModel
 import com.nextcloud.talk.databinding.FragmentMessageInputVoiceRecordingBinding
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
+import com.nextcloud.talk.ui.theme.hostViewThemeUtils
 import com.nextcloud.talk.utils.preferences.AppPreferences
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
@@ -58,6 +59,7 @@ class MessageInputVoiceRecordingFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedApplication!!.componentApplication.inject(this)
+        viewThemeUtils = hostViewThemeUtils(activity, viewThemeUtils)
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {

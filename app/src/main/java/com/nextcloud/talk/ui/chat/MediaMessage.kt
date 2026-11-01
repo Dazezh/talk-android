@@ -264,7 +264,8 @@ fun MediaMessage(
                 imageUri = retryAwarePreviewUrl,
                 context = context,
                 errorPlaceholderImage = typeContent.drawableResourceId,
-                animated = typeContent.animateGif
+                animated = typeContent.animateGif,
+                authHeader = typeContent.authHeader
             )
         }
     }

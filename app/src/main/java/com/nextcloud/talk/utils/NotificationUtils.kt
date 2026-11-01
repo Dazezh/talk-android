@@ -24,6 +24,7 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.core.net.toUri
 import coil.executeBlocking
 import coil.imageLoader
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.transform.CircleCropTransformation
 import com.bluelinelabs.logansquare.LoganSquare
@@ -46,7 +47,8 @@ object NotificationUtils {
 
     enum class NotificationChannels {
         NOTIFICATION_CHANNEL_MESSAGES_V4,
-        NOTIFICATION_CHANNEL_CALLS_V4,
+        NOTIFICATION_CHANNEL_CALLS_V5,
+        NOTIFICATION_CHANNEL_CALLS_ONGOING_V1,
         NOTIFICATION_CHANNEL_UPLOADS
     }
 
@@ -101,20 +103,39 @@ object NotificationUtils {
         val audioAttributes =
             AudioAttributes.Builder()
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_REQUEST)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
                 .build()
         val soundUri = getCallRingtoneUri(context, appPreferences)
 
         createNotificationChannel(
             context,
             Channel(
-                NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V4.name,
+                NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V5.name,
                 context.resources.getString(R.string.nc_notification_channel_calls),
                 context.resources.getString(R.string.nc_notification_channel_calls_description),
                 true
             ),
             soundUri,
             audioAttributes
+        )
+    }
+
+    /**
+     * Separate from [NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V5] (the incoming-ring channel,
+     * which must stay IMPORTANCE_HIGH) so the persistent "call in progress" foreground-service
+     * notification never heads-ups/peeks - it should only be visible by pulling down the status bar.
+     */
+    private fun createOngoingCallNotificationChannel(context: Context) {
+        createNotificationChannel(
+            context,
+            Channel(
+                NotificationChannels.NOTIFICATION_CHANNEL_CALLS_ONGOING_V1.name,
+                context.resources.getString(R.string.nc_notification_channel_calls_ongoing),
+                context.resources.getString(R.string.nc_notification_channel_calls_ongoing_description),
+                false
+            ),
+            null,
+            null
         )
     }
 
@@ -155,6 +176,7 @@ object NotificationUtils {
 
     fun registerNotificationChannels(context: Context, appPreferences: AppPreferences) {
         createCallsNotificationChannel(context, appPreferences)
+        createOngoingCallNotificationChannel(context)
         createMessagesNotificationChannel(context, appPreferences)
         createUploadsNotificationChannel(context)
     }
@@ -264,7 +286,7 @@ object NotificationUtils {
     }
 
     fun isCallsNotificationChannelEnabled(context: Context): Boolean {
-        val channel = getNotificationChannel(context, NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V4.name)
+        val channel = getNotificationChannel(context, NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V5.name)
         if (channel != null) {
             return isNotificationChannelEnabled(channel)
         }
@@ -318,7 +340,7 @@ object NotificationUtils {
             context,
             appPreferences.callRingtoneUri,
             DEFAULT_CALL_RINGTONE_URI,
-            NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V4.name
+            NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V5.name
         )
 
     fun getMessageRingtoneUri(context: Context, appPreferences: AppPreferences): Uri? =
@@ -334,13 +356,23 @@ object NotificationUtils {
         return bitmap?.let { IconCompat.createWithBitmap(it) }
     }
 
-    fun loadAvatarBitmapSync(avatarUrl: String, context: Context, credentials: String? = null): Bitmap? {
+    fun loadAvatarBitmapSync(
+        avatarUrl: String,
+        context: Context,
+        credentials: String? = null,
+        useCache: Boolean = true
+    ): Bitmap? {
         var avatarBitmap: Bitmap? = null
 
         val requestBuilder = ImageRequest.Builder(context)
             .data(avatarUrl)
             .transformations(CircleCropTransformation())
             .placeholder(R.drawable.account_circle_96dp)
+            .listener(
+                onError = { _, result ->
+                    Log.w(TAG, "Can't load avatar for URL: $avatarUrl", result.throwable)
+                }
+            )
             .target(
                 onSuccess = { result ->
                     avatarBitmap = (result as BitmapDrawable).bitmap
@@ -349,12 +381,16 @@ object NotificationUtils {
                     error?.let {
                         avatarBitmap = (error as BitmapDrawable).bitmap
                     }
-                    Log.w(TAG, "Can't load avatar for URL: $avatarUrl")
                 }
             )
 
         if (credentials != null) {
             requestBuilder.addHeader("Authorization", credentials)
+        }
+        if (!useCache) {
+            requestBuilder
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .diskCachePolicy(CachePolicy.DISABLED)
         }
 
         context.imageLoader.executeBlocking(requestBuilder.build())
@@ -362,14 +398,20 @@ object NotificationUtils {
         return avatarBitmap
     }
 
+    /**
+     * The conversation-avatar endpoint answers a one-to-one room with the other participant of the
+     * requesting account, so the same URL returns a different image per account on the same server.
+     * Those avatars bypass the caches, which are keyed by URL only.
+     */
     fun loadConversationAvatarBitmapSync(
         baseUrl: String?,
         roomToken: String,
         credentials: String?,
-        context: Context
+        context: Context,
+        isOneToOne: Boolean
     ): Bitmap? {
         val avatarUrl = ApiUtils.getUrlForConversationAvatar(ApiUtils.API_V1, baseUrl, roomToken)
-        return loadAvatarBitmapSync(avatarUrl, context, credentials)
+        return loadAvatarBitmapSync(avatarUrl, context, credentials, useCache = !isOneToOne)
     }
 
     fun saveBitmapToCache(context: Context, bitmap: Bitmap, fileName: String): Uri? {

@@ -18,6 +18,7 @@ import com.nextcloud.talk.ui.PlaybackSpeed
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
 import com.nextcloud.talk.utils.DrawableUtils
+import com.nextcloud.talk.utils.Mimetype
 import com.nextcloud.talk.utils.MimetypeUtils
 import java.time.Instant
 import java.time.LocalDate
@@ -69,7 +70,11 @@ sealed interface MessageTypeContent {
     object RegularText : MessageTypeContent
     object SystemMessage : MessageTypeContent
 
-    data class LinkPreview(val url: String) : MessageTypeContent
+    /**
+     * [authHeader] authenticates images of the account's own server at [serverBaseUrl], e.g. reference previews.
+     */
+    data class LinkPreview(val url: String, val serverBaseUrl: String? = null, val authHeader: String? = null) :
+        MessageTypeContent
 
     data class Sticker(val url: String) : MessageTypeContent
 
@@ -81,7 +86,9 @@ sealed interface MessageTypeContent {
         val blurhash: String? = null,
         val width: Int? = null,
         val height: Int? = null,
-        val isClassified: Boolean = false
+        val isClassified: Boolean = false,
+        // Credentials of the account, as the preview is always loaded from its server.
+        val authHeader: String? = null
     ) : MessageTypeContent
 
     data class UploadingMedia(
@@ -109,6 +116,15 @@ sealed interface MessageTypeContent {
         val seekbarProgress: Int,
         val waveform: List<Float>,
         val playbackSpeed: PlaybackSpeed = PlaybackSpeed.NORMAL
+    ) : MessageTypeContent
+
+    data class AudioFile(
+        val fileName: String,
+        val isPlaying: Boolean,
+        val isDownloading: Boolean,
+        val durationSeconds: Int,
+        val playedSeconds: Int,
+        val seekbarProgress: Int
     ) : MessageTypeContent
 }
 
@@ -274,6 +290,8 @@ fun getMessageTypeContent(user: User, message: ChatMessage, isClassified: Boolea
         getVoiceContent(message)
     } else if (message.hasFileAttachment && message.isTemporary) {
         getUploadingMediaContent(message)
+    } else if (message.hasFileAttachment && message.fileParameters.mimetype.startsWith(Mimetype.AUDIO_PREFIX)) {
+        getAudioFileContent(message)
     } else if (message.hasFileAttachment) {
         getMediaContent(user, message, isClassified)
     } else if (message.hasGeoLocation) {
@@ -289,7 +307,11 @@ fun getMessageTypeContent(user: User, message: ChatMessage, isClassified: Boolea
         } else if (message.isStickerLink(user, linkPreviewUrl)) {
             MessageTypeContent.Sticker(url = linkPreviewUrl)
         } else {
-            MessageTypeContent.LinkPreview(url = linkPreviewUrl)
+            MessageTypeContent.LinkPreview(
+                url = linkPreviewUrl,
+                serverBaseUrl = user.baseUrl,
+                authHeader = ApiUtils.getCredentials(user.username, user.token)
+            )
         }
     }
 
@@ -330,7 +352,8 @@ fun getMediaContent(user: User, message: ChatMessage, isClassified: Boolean = fa
         blurhash = message.fileParameters.blurhash,
         width = message.fileParameters.width,
         height = message.fileParameters.height,
-        isClassified = isClassified
+        isClassified = isClassified,
+        authHeader = ApiUtils.getCredentials(user.username, user.token)
     )
 }
 
@@ -401,4 +424,14 @@ fun getVoiceContent(message: ChatMessage): MessageTypeContent.Voice =
         playedSeconds = message.voiceMessagePlayedSeconds,
         seekbarProgress = message.voiceMessageSeekbarProgress,
         waveform = message.voiceMessageFloatArray?.toList().orEmpty()
+    )
+
+fun getAudioFileContent(message: ChatMessage): MessageTypeContent.AudioFile =
+    MessageTypeContent.AudioFile(
+        fileName = message.fileParameters.name,
+        isPlaying = message.isPlayingVoiceMessage,
+        isDownloading = message.isDownloadingVoiceMessage,
+        durationSeconds = message.voiceMessageDuration,
+        playedSeconds = message.voiceMessagePlayedSeconds,
+        seekbarProgress = message.voiceMessageSeekbarProgress
     )

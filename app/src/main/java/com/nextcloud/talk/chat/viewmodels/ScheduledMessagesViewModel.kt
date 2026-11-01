@@ -14,10 +14,12 @@ import com.nextcloud.talk.chat.data.ChatMessageRepository
 import com.nextcloud.talk.chat.data.model.ChatMessage
 import com.nextcloud.talk.chat.data.network.ChatNetworkDataSource
 import com.nextcloud.talk.data.user.model.User
-import com.nextcloud.talk.models.json.opengraph.Reference
+import com.nextcloud.talk.models.json.opengraph.ReferenceDto
 import com.nextcloud.talk.utils.ApiUtils
-import com.nextcloud.talk.utils.database.user.CurrentUserProvider
 import com.nextcloud.talk.utils.message.SendMessageUtils
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,12 +28,11 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
-class ScheduledMessagesViewModel @Inject constructor(
+class ScheduledMessagesViewModel @AssistedInject constructor(
     private val chatRepository: ChatMessageRepository,
-    private val currentUserProvider: CurrentUserProvider,
-    private val chatNetworkDataSource: ChatNetworkDataSource
+    private val chatNetworkDataSource: ChatNetworkDataSource,
+    @Assisted private val user: User
 ) : ViewModel() {
 
     sealed interface GetScheduledMessagesState
@@ -52,9 +53,6 @@ class ScheduledMessagesViewModel @Inject constructor(
         ScheduledMessageActionState
 
     data class ScheduledMessageErrorState(val error: Throwable? = null) : ScheduledMessageActionState
-
-    private val _currentUserState = MutableStateFlow<User?>(null)
-    val currentUserState: StateFlow<User?> = _currentUserState
 
     sealed interface SendNowMessageState
     object SendNowMessageIdleState : SendNowMessageState
@@ -88,8 +86,8 @@ class ScheduledMessagesViewModel @Inject constructor(
     val parentMessages: StateFlow<Map<Long, ChatMessage>> =
         _parentMessages.asStateFlow()
 
-    private val _linkPreviews = MutableStateFlow<Map<String, Reference>>(emptyMap())
-    val linkPreviews: StateFlow<Map<String, Reference>> = _linkPreviews.asStateFlow()
+    private val _linkPreviews = MutableStateFlow<Map<String, ReferenceDto>>(emptyMap())
+    val linkPreviews: StateFlow<Map<String, ReferenceDto>> = _linkPreviews.asStateFlow()
 
     fun loadScheduledMessages(credentials: String, url: String) {
         _getScheduledMessagesState.value = GetScheduledMessagesLoadingState
@@ -117,7 +115,6 @@ class ScheduledMessagesViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val user = _currentUserState.value ?: currentUserProvider.getCurrentUser().getOrNull() ?: return@launch
                 if (user.baseUrl.isNullOrBlank()) {
                     return@launch
                 }
@@ -140,13 +137,6 @@ class ScheduledMessagesViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading link preview for scheduled message", e)
             }
-        }
-    }
-
-    fun loadCurrentUser() {
-        viewModelScope.launch {
-            val user = currentUserProvider.getCurrentUser().getOrNull()
-            _currentUserState.value = user
         }
     }
 
@@ -219,9 +209,6 @@ class ScheduledMessagesViewModel @Inject constructor(
 
     private suspend fun getParentMessageById(token: String, parentMessageId: Long, threadId: Long?): ChatMessage? =
         withContext(Dispatchers.IO) {
-            val userResult = currentUserProvider.getCurrentUser()
-            val user = userResult.getOrElse { return@withContext null }
-
             val credentials = user.getCredentials()
 
             val apiVersion = ApiUtils.getChatApiVersion(
@@ -276,6 +263,11 @@ class ScheduledMessagesViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    @AssistedFactory
+    interface Factory {
+        fun build(user: User): ScheduledMessagesViewModel
     }
 
     companion object {

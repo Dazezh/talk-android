@@ -34,13 +34,13 @@ import com.nextcloud.talk.utils.NotificationUtils
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_INTERNAL_USER_ID
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_ROOM_TOKEN
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_SYSTEM_NOTIFICATION_ID
-import com.nextcloud.talk.utils.database.user.CurrentUserProviderOld
 import com.nextcloud.talk.utils.message.SendMessageUtils
 import io.reactivex.Observer
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @AutoInjector(NextcloudTalkApplication::class)
@@ -48,9 +48,6 @@ class DirectReplyReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var userManager: UserManager
-
-    @Inject
-    lateinit var currentUserProvider: CurrentUserProviderOld
 
     @Inject
     lateinit var ncApi: NcApi
@@ -73,8 +70,11 @@ class DirectReplyReceiver : BroadcastReceiver() {
         systemNotificationId = intent!!.getIntExtra(KEY_SYSTEM_NOTIFICATION_ID, 0)
         roomToken = intent.getStringExtra(KEY_ROOM_TOKEN)
 
-        val id = intent.getLongExtra(KEY_INTERNAL_USER_ID, currentUserProvider.currentUser.blockingGet().id!!)
-        currentUser = userManager.getUserWithId(id).blockingGet()
+        val id = intent.getLongExtra(KEY_INTERNAL_USER_ID, 0L)
+        currentUser = runBlocking { userManager.getUserWithId(id) } ?: run {
+            Log.e(TAG, "No user found for id $id")
+            return
+        }
 
         replyMessage = getMessageText(intent)
         sendDirectReply()

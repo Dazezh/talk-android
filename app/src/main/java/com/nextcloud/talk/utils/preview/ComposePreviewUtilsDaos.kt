@@ -12,13 +12,20 @@ import com.nextcloud.talk.data.database.dao.ChatMessagesDao
 import com.nextcloud.talk.data.database.dao.ConversationsDao
 import com.nextcloud.talk.data.database.model.ChatBlockEntity
 import com.nextcloud.talk.data.database.model.ChatMessageEntity
+import com.nextcloud.talk.data.database.model.SendStatus
 import com.nextcloud.talk.data.database.model.ConversationEntity
+import com.nextcloud.talk.data.storage.ArbitraryStoragesRepository
+import com.nextcloud.talk.data.storage.model.ArbitraryStorage
+import com.nextcloud.talk.data.storage.model.ArbitraryStorageEntity
 import com.nextcloud.talk.data.user.UsersDao
+import com.nextcloud.talk.data.user.model.UserCapabilitiesUpdate
+import com.nextcloud.talk.data.user.model.UserClientCertificateUpdate
+import com.nextcloud.talk.data.user.model.UserCredentialsUpdate
+import com.nextcloud.talk.data.user.model.UserDisplayNameUpdate
 import com.nextcloud.talk.data.user.model.UserEntity
+import com.nextcloud.talk.data.user.model.UserExternalSignalingServerUpdate
 import com.nextcloud.talk.models.json.push.PushConfigurationState
 import io.reactivex.Maybe
-import io.reactivex.Observable
-import io.reactivex.Single
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -59,6 +66,9 @@ class DummyChatMessagesDaoImpl : ChatMessagesDao {
         /* */
     }
 
+    override suspend fun hasServerCopyOfReferenceId(internalConversationId: String, referenceId: String): Boolean =
+        false
+
     override fun getChatMessageForConversation(
         internalConversationId: String,
         messageId: Long
@@ -85,6 +95,16 @@ class DummyChatMessagesDaoImpl : ChatMessagesDao {
     }
 
     override fun deleteTempChatMessageIfPending(internalConversationId: String, referenceId: String): Int = 0
+
+    override suspend fun failPendingTempTextMessages(internalConversationId: String, createdBefore: Long): Int = 0
+
+    override fun updateTempMessageSendStatus(
+        internalConversationId: String,
+        referenceId: String,
+        sendStatus: SendStatus
+    ): Int = 0
+
+    override fun updateMessageText(internalConversationId: String, messageId: Long, message: String): Int = 0
 
     override fun updateChatMessage(message: ChatMessageEntity) {
         /* */
@@ -161,7 +181,7 @@ class DummyChatMessagesDaoImpl : ChatMessagesDao {
     override fun getNumberOfThreadReplies(internalConversationId: String, threadId: Long): Int = 0
 }
 
-class DummyUserDaoImpl : UsersDao() {
+class DummyUserDaoImpl : UsersDao {
     private val dummyUsers = mutableListOf(
         UserEntity(1L, "user1_id", "user1", "server1", "1"),
         UserEntity(2L, "user2_id", "user2", "server1", "2"),
@@ -169,28 +189,24 @@ class DummyUserDaoImpl : UsersDao() {
     )
     private var activeUserId: Long? = 1L
 
-    override fun getActiveUser(): Maybe<UserEntity> =
-        Maybe.fromCallable {
-            dummyUsers.find { it.id == activeUserId && !it.scheduledForDeletion }
-        }
+    override suspend fun getActiveUser(): UserEntity? =
+        dummyUsers.find { it.id == activeUserId && !it.scheduledForDeletion }
 
-    override fun getActiveUserObservable(): Observable<UserEntity> =
-        Observable.fromCallable {
-            dummyUsers.find { it.id == activeUserId && !it.scheduledForDeletion }
-        }
+    override fun getActiveUserFlow(): Flow<UserEntity?> =
+        flowOf(dummyUsers.find { it.id == activeUserId && !it.scheduledForDeletion })
 
     override fun getActiveUserSynchronously(): UserEntity? =
         dummyUsers.find {
             it.id == activeUserId && !it.scheduledForDeletion
         }
 
-    override fun deleteUser(user: UserEntity): Int {
+    override suspend fun deleteUser(user: UserEntity): Int {
         val initialSize = dummyUsers.size
         dummyUsers.removeIf { it.id == user.id }
         return initialSize - dummyUsers.size
     }
 
-    override fun updateUser(user: UserEntity): Int {
+    override suspend fun updateUser(user: UserEntity): Int {
         val index = dummyUsers.indexOfFirst { it.id == user.id }
         return if (index != -1) {
             dummyUsers[index] = user
@@ -200,65 +216,84 @@ class DummyUserDaoImpl : UsersDao() {
         }
     }
 
-    override fun saveUser(user: UserEntity): Long {
+    override suspend fun saveUser(user: UserEntity): Long {
         val newUser = user.copy(id = dummyUsers.size + 1L)
         dummyUsers.add(newUser)
         return newUser.id
     }
 
-    override fun saveUsers(vararg users: UserEntity): List<Long> = users.map { saveUser(it) }
+    override suspend fun saveUsers(vararg users: UserEntity): List<Long> = users.map { saveUser(it) }
 
-    override fun getUsers(): Single<List<UserEntity>> = Single.just(dummyUsers.filter { !it.scheduledForDeletion })
+    override suspend fun getUsers(): List<UserEntity> = dummyUsers.filter { !it.scheduledForDeletion }
 
-    override fun getUserWithId(id: Long): Maybe<UserEntity> = Maybe.fromCallable { dummyUsers.find { it.id == id } }
+    override suspend fun getUserWithId(id: Long): UserEntity? = dummyUsers.find { it.id == id }
 
-    override fun getUserWithIdNotScheduledForDeletion(id: Long): Maybe<UserEntity> =
-        Maybe.fromCallable {
-            dummyUsers.find { it.id == id && !it.scheduledForDeletion }
+    override fun getUserWithIdFlow(id: Long): Flow<UserEntity?> = flowOf(dummyUsers.find { it.id == id })
+
+    override suspend fun repairMultipleActiveUsers(): Int = 0
+
+    override suspend fun getUserWithIdNotScheduledForDeletion(id: Long): UserEntity? =
+        dummyUsers.find { it.id == id && !it.scheduledForDeletion }
+
+    override suspend fun getUserWithUserId(userId: String): UserEntity? = dummyUsers.find { it.userId == userId }
+
+    override suspend fun getUsersScheduledForDeletion(): List<UserEntity> =
+        dummyUsers.filter {
+            it.scheduledForDeletion
         }
 
-    override fun getUserWithUserId(userId: String): Maybe<UserEntity> =
-        Maybe.fromCallable {
-            dummyUsers.find { it.userId == userId }
+    override suspend fun getUsersNotScheduledForDeletion(): List<UserEntity> =
+        dummyUsers.filter {
+            !it.scheduledForDeletion
         }
 
-    override fun getUsersScheduledForDeletion(): Single<List<UserEntity>> =
-        Single.just(
-            dummyUsers.filter {
-                it.scheduledForDeletion
-            }
-        )
+    override suspend fun getUserWithUsernameAndServer(username: String, server: String): UserEntity? =
+        dummyUsers.find { it.username == username }
 
-    override fun getUsersNotScheduledForDeletion(): Single<List<UserEntity>> =
-        Single.just(
-            dummyUsers.filter {
-                !it.scheduledForDeletion
-            }
-        )
-
-    override fun getUserWithUsernameAndServer(username: String, server: String): Maybe<UserEntity> =
-        Maybe.fromCallable {
-            dummyUsers.find { it.username == username }
-        }
-
-    override fun setUserAsActiveWithId(id: Long): Int {
+    override suspend fun setUserAsActiveWithId(id: Long): Int {
         activeUserId = id
         return 1
     }
 
-    override fun updatePushState(id: Long, state: PushConfigurationState): Single<Int> {
+    override suspend fun updatePushState(id: Long, state: PushConfigurationState): Int {
         val index = dummyUsers.indexOfFirst { it.id == id }
         return if (index != -1) {
             dummyUsers[index] = dummyUsers[index]
-            Single.just(1)
+            1
         } else {
-            Single.just(0)
+            0
         }
+    }
+
+    override suspend fun updateCapabilities(update: UserCapabilitiesUpdate): Int =
+        updateDummyUser(update.id) {
+            it.copy(capabilities = update.capabilities, serverVersion = update.serverVersion)
+        }
+
+    override suspend fun updateExternalSignalingServer(update: UserExternalSignalingServerUpdate): Int =
+        updateDummyUser(update.id) { it.copy(externalSignalingServer = update.externalSignalingServer) }
+
+    override suspend fun updateDisplayName(update: UserDisplayNameUpdate): Int =
+        updateDummyUser(update.id) { it.copy(displayName = update.displayName) }
+
+    override suspend fun updateClientCertificate(update: UserClientCertificateUpdate): Int =
+        updateDummyUser(update.id) { it.copy(clientCertificate = update.clientCertificate) }
+
+    override suspend fun updateCredentials(update: UserCredentialsUpdate): Int =
+        updateDummyUser(update.id) { it.copy(token = update.token, clientCertificate = update.clientCertificate) }
+
+    private fun updateDummyUser(id: Long, update: (UserEntity) -> UserEntity): Int {
+        val index = dummyUsers.indexOfFirst { it.id == id }
+        if (index == -1) return 0
+        dummyUsers[index] = update(dummyUsers[index])
+        return 1
     }
 }
 
 class DummyConversationDaoImpl : ConversationsDao {
     override fun getConversationsForUser(accountId: Long): Flow<List<ConversationEntity>> = flowOf()
+
+    override suspend fun getConversationIdsForUser(accountId: Long): List<String> = emptyList()
 
     override fun getConversationForUser(accountId: Long, token: String): Flow<ConversationEntity?> = flowOf()
 
@@ -326,4 +361,18 @@ class DummyChatBlocksDaoImpl : ChatBlocksDao {
 
     override suspend fun getChatBlocksForConversation(internalConversationId: String): List<ChatBlockEntity> =
         emptyList()
+}
+
+class DummyArbitraryStoragesRepositoryImpl : ArbitraryStoragesRepository {
+    override fun getStorageSetting(
+        accountIdentifier: Long,
+        key: String,
+        objectString: String
+    ): Maybe<ArbitraryStorage> = Maybe.empty()
+
+    override fun deleteArbitraryStorage(accountIdentifier: Long): Int = 0
+
+    override fun saveArbitraryStorage(arbitraryStorage: ArbitraryStorage): Long = 0
+
+    override fun getAll(): Maybe<List<ArbitraryStorageEntity>> = Maybe.empty()
 }

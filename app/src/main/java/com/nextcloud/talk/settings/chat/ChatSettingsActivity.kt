@@ -76,10 +76,10 @@ import com.nextcloud.talk.chat.wallpaper.loadWallpaperImage
 import com.nextcloud.talk.components.ColoredStatusBar
 import com.nextcloud.talk.components.StandardAppBar
 import com.nextcloud.talk.data.user.model.User
-import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.preferences.RalkAppearancePreferences
 import com.nextcloud.talk.utils.preferences.StickerSize
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 private const val THUMBNAIL_MAX_DIMENSION = 320
@@ -128,9 +128,6 @@ class ChatSettingsActivity : BaseActivity() {
     @Inject
     lateinit var chatWallpaperRepository: ChatWallpaperRepository
 
-    @Inject
-    lateinit var userManager: UserManager
-
     private var rectangularInput by mutableStateOf(false)
     private var stickerSize by mutableStateOf(StickerSize.MEDIUM)
     private var accentSeed by mutableStateOf(0)
@@ -157,7 +154,7 @@ class ChatSettingsActivity : BaseActivity() {
         stickerSize = appearancePreferences.stickerSize
         accentSeed = appearancePreferences.accentSeedOrDefault(this)
         wallpaperPath = appearancePreferences.wallpaperPath
-        wallpaperUser = userManager.currentUser.blockingGet()
+        wallpaperUser = runBlocking { userManager.getDefaultUser() }
         loadWallpapers()
 
         val colorScheme = viewThemeUtils.getColorScheme(this)

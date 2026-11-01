@@ -27,8 +27,7 @@ import com.nextcloud.talk.application.NextcloudTalkApplication.Companion.sharedA
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.databinding.CallNotificationActivityBinding
 import com.nextcloud.talk.extensions.loadUserAvatar
-import com.nextcloud.talk.models.json.participants.Participant
-import com.nextcloud.talk.users.UserManager
+import com.nextcloud.talk.models.json.participants.ParticipantDto
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
 import com.nextcloud.talk.utils.CapabilitiesUtil.hasSpreedFeatureCapability
@@ -53,18 +52,13 @@ class CallNotificationActivity : CallBaseActivity() {
     @Inject
     var cache: Cache? = null
 
-    @Inject
-    lateinit var userManager: UserManager
-
     private var roomToken: String? = null
     private var notificationTimestamp: Int? = null
     private var displayName: String? = null
     private var callFlag: Int = 0
     private var isOneToOneCall: Boolean = true
     private var conversationName: String? = null
-    private var internalUserId: Long = -1
-
-    private var userBeingCalled: User? = null
+    private lateinit var userBeingCalled: User
     private var leavingScreen = false
     private var handler: Handler? = null
     private var binding: CallNotificationActivityBinding? = null
@@ -72,14 +66,15 @@ class CallNotificationActivity : CallBaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedApplication!!.componentApplication.inject(this)
+        userBeingCalled = setUpBoundUserOrFinish() ?: return
         binding = CallNotificationActivityBinding.inflate(layoutInflater)
         setContentView(binding!!.root)
         hideNavigationIfNoPipAvailable()
 
         handleExtras()
-        userBeingCalled = userManager.getUserWithId(internalUserId).blockingGet()
 
         setupCallTypeDescription()
+        setupCallAnswerButtons()
         binding!!.conversationNameTextView.text = displayName
         setupAvatar(isOneToOneCall, conversationName)
         initClickListeners()
@@ -94,13 +89,12 @@ class CallNotificationActivity : CallBaseActivity() {
         callFlag = extras.getInt(BundleKeys.KEY_CALL_FLAG)
         isOneToOneCall = extras.getBoolean(KEY_ROOM_ONE_TO_ONE)
         conversationName = extras.getString(BundleKeys.KEY_CONVERSATION_NAME, "")
-        internalUserId = extras.getLong(BundleKeys.KEY_INTERNAL_USER_ID)
     }
 
     private fun setupAvatar(isOneToOneCall: Boolean, conversationName: String?) {
         if (isOneToOneCall) {
             binding!!.avatarImageView.loadUserAvatar(
-                userBeingCalled!!,
+                userBeingCalled,
                 conversationName!!,
                 true,
                 false
@@ -110,9 +104,9 @@ class CallNotificationActivity : CallBaseActivity() {
         }
     }
 
-    private fun setupCallTypeDescription() {
+    private fun hasCallFlagsCapability(): Boolean {
         val apiVersion = ApiUtils.getConversationApiVersion(
-            userBeingCalled!!,
+            userBeingCalled,
             intArrayOf(
                 ApiUtils.API_V4,
                 ApiUtils.API_V3,
@@ -120,23 +114,25 @@ class CallNotificationActivity : CallBaseActivity() {
             )
         )
 
-        if (apiVersion >= ApiUtils.API_V3) {
-            val hasCallFlags = hasSpreedFeatureCapability(
-                userBeingCalled?.capabilities?.spreedCapability!!,
+        return apiVersion >= ApiUtils.API_V3 &&
+            hasSpreedFeatureCapability(
+                userBeingCalled.capabilities?.spreedCapability,
                 SpreedFeatures.CONVERSATION_CALL_FLAGS
             )
-            if (hasCallFlags) {
-                if (isInCallWithVideo(callFlag)) {
-                    binding!!.incomingCallVoiceOrVideoTextView.text = String.format(
-                        resources.getString(R.string.nc_call_video),
-                        resources.getString(R.string.nc_app_product_name)
-                    )
-                } else {
-                    binding!!.incomingCallVoiceOrVideoTextView.text = String.format(
-                        resources.getString(R.string.nc_call_voice),
-                        resources.getString(R.string.nc_app_product_name)
-                    )
-                }
+    }
+
+    private fun setupCallTypeDescription() {
+        if (hasCallFlagsCapability()) {
+            if (isInCallWithVideo(callFlag)) {
+                binding!!.incomingCallVoiceOrVideoTextView.text = String.format(
+                    resources.getString(R.string.nc_call_video),
+                    resources.getString(R.string.nc_app_product_name)
+                )
+            } else {
+                binding!!.incomingCallVoiceOrVideoTextView.text = String.format(
+                    resources.getString(R.string.nc_call_voice),
+                    resources.getString(R.string.nc_app_product_name)
+                )
             }
         } else {
             val callDescriptionWithoutTypeInfo = String.format(
@@ -144,6 +140,16 @@ class CallNotificationActivity : CallBaseActivity() {
                 resources.getString(R.string.nc_app_product_name)
             )
             binding!!.incomingCallVoiceOrVideoTextView.text = callDescriptionWithoutTypeInfo
+        }
+    }
+
+    private fun setupCallAnswerButtons() {
+        if (hasCallFlagsCapability()) {
+            if (isInCallWithVideo(callFlag)) {
+                binding!!.callAnswerVoiceOnlyView.visibility = View.GONE
+            } else {
+                binding!!.callAnswerCameraView.visibility = View.GONE
+            }
         }
     }
 
@@ -192,7 +198,7 @@ class CallNotificationActivity : CallBaseActivity() {
     }
 
     private fun proceedToCall() {
-        if (CapabilitiesUtil.isCallEndToEndEncryptionEnabled(userBeingCalled?.capabilities?.spreedCapability)) {
+        if (CapabilitiesUtil.isCallEndToEndEncryptionEnabled(userBeingCalled.capabilities?.spreedCapability)) {
             Toast.makeText(context, R.string.nc_call_e2ee_not_supported, Toast.LENGTH_LONG).show()
             hangup()
             return
@@ -203,7 +209,7 @@ class CallNotificationActivity : CallBaseActivity() {
         startActivity(callIntent)
     }
 
-    private fun isInCallWithVideo(callFlag: Int): Boolean = (callFlag and Participant.InCallFlags.WITH_VIDEO) > 0
+    private fun isInCallWithVideo(callFlag: Int): Boolean = (callFlag and ParticipantDto.InCallFlags.WITH_VIDEO) > 0
 
     override fun onStop() {
         val notificationManager = NotificationManagerCompat.from(context)

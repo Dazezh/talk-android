@@ -167,7 +167,7 @@
         <activity
             android:name=".conversationlist.ConversationsListActivity"
             android:exported="true"
-            android:theme="@style/AppTheme">
+            android:theme="@style/AppTheme.DisplayCutout">
 
             <meta-data
                 android:name="android.service.chooser.chooser_target_service"
@@ -193,7 +193,7 @@
 
         <activity
             android:name=".chat.ChatActivity"
-            android:theme="@style/AppTheme" />
+            android:theme="@style/AppTheme.DisplayCutout" />
 
         <activity
             android:name=".activities.CallActivity"
@@ -216,11 +216,6 @@
             android:theme="@style/AppTheme.CallLauncher" />
 
         <activity
-            android:name=".fullscreenfile.FullScreenMediaActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:theme="@style/FullScreenMediaTheme" />
-
-        <activity
             android:name=".fullscreenfile.FullScreenTextViewerActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:theme="@style/FullScreenTextTheme" />
@@ -236,10 +231,6 @@
 
         <activity
             android:name=".remotefilebrowser.activities.RemoteFileBrowserActivity"
-            android:theme="@style/AppTheme" />
-
-        <activity
-            android:name=".messagesearch.MessageSearchActivity"
             android:theme="@style/AppTheme" />
 
         <activity
@@ -338,6 +329,9 @@
             android:exported="false" />
         <receiver
             android:name=".receivers.DeclineCallReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".receivers.EndCallReceiver"
             android:exported="false" />
 
         <service

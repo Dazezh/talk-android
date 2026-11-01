@@ -10,14 +10,13 @@ package com.nextcloud.talk.api;
 
 import com.nextcloud.talk.models.json.capabilities.CapabilitiesOverall;
 import com.nextcloud.talk.models.json.capabilities.RoomCapabilitiesOverall;
-import com.nextcloud.talk.models.json.chat.ChatOverall;
 import com.nextcloud.talk.models.json.chat.ChatOverallSingleMessage;
 import com.nextcloud.talk.models.json.chat.ChatShareOverall;
 import com.nextcloud.talk.models.json.chat.ChatShareOverviewOverall;
 import com.nextcloud.talk.models.json.conversations.RoomOverall;
 import com.nextcloud.talk.models.json.conversations.RoomsOverall;
 import com.nextcloud.talk.models.json.generic.GenericOverall;
-import com.nextcloud.talk.models.json.generic.Status;
+import com.nextcloud.talk.models.json.generic.StatusDto;
 import com.nextcloud.talk.models.json.hovercard.HoverCardOverall;
 import com.nextcloud.talk.models.json.invitation.InvitationOverall;
 import com.nextcloud.talk.models.json.mention.MentionOverall;
@@ -25,11 +24,9 @@ import com.nextcloud.talk.models.json.notifications.NotificationOverall;
 import com.nextcloud.talk.models.json.opengraph.OpenGraphOverall;
 import com.nextcloud.talk.models.json.participants.AddParticipantOverall;
 import com.nextcloud.talk.models.json.participants.ParticipantsOverall;
-import com.nextcloud.talk.models.json.participants.TalkBanOverall;
 import com.nextcloud.talk.models.json.push.PushRegistrationOverall;
 import com.nextcloud.talk.models.json.push.VapidOverall;
 import com.nextcloud.talk.models.json.reactions.ReactionsOverall;
-import com.nextcloud.talk.models.json.reminder.ReminderOverall;
 import com.nextcloud.talk.models.json.search.ContactsByNumberOverall;
 import com.nextcloud.talk.models.json.signaling.SignalingOverall;
 import com.nextcloud.talk.models.json.signaling.settings.SignalingSettingsOverall;
@@ -95,9 +92,10 @@ public interface NcApi {
         Server URL is: baseUrl + ocsApiVersion + spreedApiVersion + /room
      */
     @GET
-    Observable<RoomsOverall> getRooms(@Header("Authorization") String authorization,
-                                      @Url String url,
-                                      @Nullable @Query("includeStatus") Boolean includeStatus);
+    Observable<Response<RoomsOverall>> getRooms(@Header("Authorization") String authorization,
+                                                @Url String url,
+                                                @Nullable @Query("includeStatus") Boolean includeStatus,
+                                                @Nullable @Query("modifiedSince") Long modifiedSince);
 
     /*
         Server URL is: baseUrl + ocsApiVersion + spreedApiVersion + /room/roomToken
@@ -277,7 +275,7 @@ public interface NcApi {
         Server URL is: baseUrl + /status.php
      */
     @GET
-    Observable<Status> getServerStatus(@Url String url);
+    Observable<StatusDto> getServerStatus(@Url String url);
 
     @GET
     Observable<VapidOverall> getVapidKey(
@@ -632,20 +630,6 @@ public interface NcApi {
     @GET
     Observable<LanguagesOverall> getLanguages(@Header("Authorization") String authorization,
                                               @Url String url);
-
-    @GET
-    Observable<ReminderOverall> getReminder(@Header("Authorization") String authorization,
-                                            @Url String url);
-
-    @DELETE
-    Observable<GenericOverall> deleteReminder(@Header("Authorization") String authorization,
-                                              @Url String url);
-
-    @FormUrlEncoded
-    @POST
-    Observable<ReminderOverall> setReminder(@Header("Authorization") String authorization,
-                                            @Url String url,
-                                            @Field("timestamp") int timestamp);
 
     @FormUrlEncoded
     @PUT

@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,6 +55,9 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -61,6 +66,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import coil.memory.MemoryCache
@@ -76,9 +82,9 @@ import com.nextcloud.talk.extensions.loadNoteToSelfAvatar
 import com.nextcloud.talk.extensions.loadSystemAvatar
 import com.nextcloud.talk.models.MessageDraft
 import com.nextcloud.talk.models.domain.ConversationModel
-import com.nextcloud.talk.models.json.chat.ChatMessageJson
+import com.nextcloud.talk.models.json.chat.ChatMessageDto
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
-import com.nextcloud.talk.models.json.participants.Participant
+import com.nextcloud.talk.models.json.participants.ParticipantDto
 import com.nextcloud.talk.ui.StatusDrawable
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.AvatarImageLoader
@@ -94,6 +100,8 @@ private const val CALL_OVERLAY_SIZE_DP = 16
 private const val STATUS_INTERNAL_SIZE_DP = 9f
 private const val ICON_MSG_SIZE_DP = 14
 private const val ICON_MSG_SPACING_DP = 2
+private const val THREAD_ICON_ID = "threadIcon"
+private const val THREAD_ICON_SIZE_SP = 14
 private const val UNREAD_THRESHOLD = 1000
 private const val UNREAD_BUBBLE_STROKE_DP = 1.5f
 private const val MILLIS_PER_SECOND = 1_000L
@@ -254,7 +262,7 @@ private fun ConversationAvatarImage(model: ConversationModel, currentUser: User,
                 val request = remember(avatarContent.url, credentials) {
                     ImageRequest.Builder(context)
                         .data(avatarContent.url)
-                        .diskCacheKey("${avatarContent.url}#v2")
+                        .diskCacheKey(avatarContent.diskCacheKey)
                         .addHeader("Authorization", credentials)
                         .crossfade(true)
                         .listener(
@@ -647,8 +655,9 @@ private fun LastMessageContent(
             }
         }
         Text(
-            text = buildHighlightedText(displayText, searchQuery, primaryColor),
+            text = buildLastMessageText(displayText, parsedText, chatMessage.isThread, searchQuery, primaryColor),
             modifier = modifier,
+            inlineContent = threadIconInlineContent,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
@@ -665,8 +674,9 @@ private fun LastMessageContent(
     ) {
         val parsedText = ChatUtils.getParsedMessage(chatMessage.message, chatMessage.messageParameters) ?: ""
         Text(
-            text = buildHighlightedText(parsedText, searchQuery, primaryColor),
+            text = buildLastMessageText(parsedText, parsedText, chatMessage.isThread, searchQuery, primaryColor),
             modifier = modifier,
+            inlineContent = threadIconInlineContent,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium,
@@ -685,6 +695,7 @@ private fun LastMessageContent(
                 authorPrefix = prefix,
                 iconRes = R.drawable.baseline_mic_24,
                 name = name,
+                isThread = chatMessage.isThread,
                 fontWeight = fontWeight,
                 modifier = modifier,
                 searchQuery = searchQuery
@@ -706,6 +717,7 @@ private fun LastMessageContent(
                 authorPrefix = prefix,
                 iconRes = icon,
                 name = name,
+                isThread = chatMessage.isThread,
                 fontWeight = fontWeight,
                 modifier = modifier,
                 searchQuery = searchQuery
@@ -720,6 +732,7 @@ private fun LastMessageContent(
                 authorPrefix = prefix,
                 iconRes = R.drawable.baseline_location_pin_24,
                 name = name,
+                isThread = chatMessage.isThread,
                 fontWeight = fontWeight,
                 modifier = modifier,
                 searchQuery = searchQuery
@@ -734,6 +747,7 @@ private fun LastMessageContent(
                 authorPrefix = prefix,
                 iconRes = R.drawable.baseline_bar_chart_24,
                 name = name,
+                isThread = chatMessage.isThread,
                 fontWeight = fontWeight,
                 modifier = modifier,
                 searchQuery = searchQuery
@@ -748,6 +762,7 @@ private fun LastMessageContent(
                 authorPrefix = prefix,
                 iconRes = R.drawable.baseline_article_24,
                 name = name,
+                isThread = chatMessage.isThread,
                 fontWeight = fontWeight,
                 modifier = modifier,
                 searchQuery = searchQuery
@@ -757,57 +772,20 @@ private fun LastMessageContent(
 
         ChatMessage.MessageType.SINGLE_LINK_GIPHY_MESSAGE,
         ChatMessage.MessageType.SINGLE_LINK_TENOR_MESSAGE,
-        ChatMessage.MessageType.SINGLE_LINK_GIF_MESSAGE -> {
-            val gifSelf = stringResource(R.string.nc_sent_a_gif_you)
-            val gifOther = stringResource(R.string.nc_sent_a_gif, chatMessage.actorDisplayName ?: "")
-            Text(
-                text = if (chatMessage.actorId == currentUser.userId) gifSelf else gifOther,
-                modifier = modifier,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = fontWeight,
-                color = colorResource(R.color.textColorMaxContrast)
-            )
-            return
-        }
-
-        ChatMessage.MessageType.SINGLE_LINK_IMAGE_MESSAGE -> {
-            val imgSelf = stringResource(R.string.nc_sent_an_image_you)
-            val imgOther = stringResource(R.string.nc_sent_an_image, chatMessage.actorDisplayName ?: "")
-            Text(
-                text = if (chatMessage.actorId == currentUser.userId) imgSelf else imgOther,
-                modifier = modifier,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = fontWeight,
-                color = colorResource(R.color.textColorMaxContrast)
-            )
-            return
-        }
-
-        ChatMessage.MessageType.SINGLE_LINK_VIDEO_MESSAGE -> {
-            val vidSelf = stringResource(R.string.nc_sent_a_video_you)
-            val vidOther = stringResource(R.string.nc_sent_a_video, chatMessage.actorDisplayName ?: "")
-            Text(
-                text = if (chatMessage.actorId == currentUser.userId) vidSelf else vidOther,
-                modifier = modifier,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = fontWeight,
-                color = colorResource(R.color.textColorMaxContrast)
-            )
-            return
-        }
-
+        ChatMessage.MessageType.SINGLE_LINK_GIF_MESSAGE,
+        ChatMessage.MessageType.SINGLE_LINK_IMAGE_MESSAGE,
+        ChatMessage.MessageType.SINGLE_LINK_VIDEO_MESSAGE,
         ChatMessage.MessageType.SINGLE_LINK_AUDIO_MESSAGE -> {
-            val audSelf = stringResource(R.string.nc_sent_an_audio_you)
-            val audOther = stringResource(R.string.nc_sent_an_audio, chatMessage.actorDisplayName ?: "")
+            val (selfRes, otherRes) = mediaMessageLabels(msgType)
+            val label = if (chatMessage.actorId == currentUser.userId) {
+                stringResource(selfRes)
+            } else {
+                stringResource(otherRes, chatMessage.actorDisplayName ?: "")
+            }
             Text(
-                text = if (chatMessage.actorId == currentUser.userId) audSelf else audOther,
+                text = buildLastMessageText(label, chatMessage.isThread),
                 modifier = modifier,
+                inlineContent = threadIconInlineContent,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium,
@@ -839,8 +817,9 @@ private fun LastMessageContent(
         }
     }
     Text(
-        text = buildHighlightedText(displayText, searchQuery, primaryColor),
+        text = buildLastMessageText(displayText, parsedText, chatMessage.isThread, searchQuery, primaryColor),
         modifier = modifier,
+        inlineContent = threadIconInlineContent,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         style = MaterialTheme.typography.bodyMedium,
@@ -855,6 +834,7 @@ private fun AttachmentRow(
     authorPrefix: String,
     @DrawableRes iconRes: Int?,
     name: String,
+    isThread: Boolean,
     fontWeight: FontWeight,
     modifier: Modifier = Modifier,
     searchQuery: String = ""
@@ -869,6 +849,10 @@ private fun AttachmentRow(
                 maxLines = 1,
                 color = colorResource(R.color.textColorMaxContrast)
             )
+        }
+        if (isThread) {
+            ThreadIcon(Modifier.size(ICON_MSG_SIZE_DP.dp))
+            Spacer(Modifier.width(ICON_MSG_SPACING_DP.dp))
         }
         if (iconRes != null) {
             Icon(
@@ -890,6 +874,61 @@ private fun AttachmentRow(
         )
     }
 }
+
+@Composable
+private fun ThreadIcon(modifier: Modifier = Modifier) {
+    Icon(
+        painter = painterResource(R.drawable.outline_forum_24),
+        contentDescription = stringResource(R.string.thread),
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+    )
+}
+
+private val threadIconInlineContent = mapOf(
+    THREAD_ICON_ID to InlineTextContent(
+        Placeholder(THREAD_ICON_SIZE_SP.sp, THREAD_ICON_SIZE_SP.sp, PlaceholderVerticalAlign.TextCenter)
+    ) {
+        ThreadIcon(Modifier.fillMaxSize())
+    }
+)
+
+/**
+ * Inserts the thread icon between the author prefix and the message itself. Requires [displayText] to end with
+ * [messageText]; when a translated prefix format breaks that assumption the icon is omitted rather than misplaced.
+ */
+private fun buildLastMessageText(
+    displayText: String,
+    messageText: String,
+    isThread: Boolean,
+    searchQuery: String,
+    highlightColor: Color
+): AnnotatedString {
+    if (!isThread || !displayText.endsWith(messageText)) {
+        return buildHighlightedText(displayText, searchQuery, highlightColor)
+    }
+    val prefix = displayText.dropLast(messageText.length)
+    return buildAnnotatedString {
+        append(buildHighlightedText(prefix, searchQuery, highlightColor))
+        appendInlineContent(THREAD_ICON_ID)
+        append(" ")
+        append(buildHighlightedText(messageText, searchQuery, highlightColor))
+    }
+}
+
+private fun buildLastMessageText(text: String, isThread: Boolean): AnnotatedString =
+    buildLastMessageText(text, text, isThread, searchQuery = "", highlightColor = Color.Unspecified)
+
+private fun mediaMessageLabels(msgType: ChatMessage.MessageType): Pair<Int, Int> =
+    when (msgType) {
+        ChatMessage.MessageType.SINGLE_LINK_IMAGE_MESSAGE ->
+            R.string.nc_sent_an_image_you to R.string.nc_sent_an_image
+        ChatMessage.MessageType.SINGLE_LINK_VIDEO_MESSAGE ->
+            R.string.nc_sent_a_video_you to R.string.nc_sent_a_video
+        ChatMessage.MessageType.SINGLE_LINK_AUDIO_MESSAGE ->
+            R.string.nc_sent_an_audio_you to R.string.nc_sent_an_audio
+        else -> R.string.nc_sent_a_gif_you to R.string.nc_sent_a_gif
+    }
 
 private fun authorPrefix(chatMessage: ChatMessage, currentUser: User): String =
     if (chatMessage.actorId == currentUser.userId) {
@@ -937,7 +976,7 @@ private fun previewModel(
     status: String? = null,
     statusIcon: String? = null,
     remoteServer: String? = null,
-    lastMessage: ChatMessageJson? = null,
+    lastMessage: ChatMessageDto? = null,
     messageDraft: MessageDraft? = null,
     lobbyState: ConversationEnums.LobbyState = ConversationEnums.LobbyState.LOBBY_STATE_ALL_PARTICIPANTS,
     readOnlyState: ConversationEnums.ConversationReadOnlyState =
@@ -950,7 +989,7 @@ private fun previewModel(
     displayName = displayName,
     description = "",
     type = type,
-    participantType = Participant.ParticipantType.USER,
+    participantType = ParticipantDto.ParticipantType.USER,
     sessionId = "s",
     actorId = "a",
     actorType = "users",
@@ -987,15 +1026,17 @@ private fun previewMsg(
     message: String = "Hello there",
     messageType: String = "comment",
     systemMessageType: ChatMessage.SystemMessageType? = null,
-    messageParameters: HashMap<String?, HashMap<String?, String?>>? = null
-) = ChatMessageJson(
+    messageParameters: HashMap<String?, HashMap<String?, String?>>? = null,
+    hasThread: Boolean = false
+) = ChatMessageDto(
     id = 1L,
     actorId = actorId,
     actorDisplayName = actorDisplayName,
     message = message,
     messageType = messageType,
     systemMessageType = systemMessageType,
-    messageParameters = messageParameters
+    messageParameters = messageParameters,
+    hasThread = hasThread
 )
 
 @Composable
@@ -1646,6 +1687,42 @@ private fun PreviewLastMessageTextWithEmoji() =
             model = previewModel(
                 displayName = "Alice",
                 lastMessage = previewMsg(message = "Sch-nes Wochenende! ????")
+            ),
+            currentUser = previewUser(),
+            callbacks = ConversationListItemCallbacks(onClick = {}, onLongClick = {})
+        )
+    }
+
+@Preview(name = "G50 - Thread text message")
+@Composable
+private fun PreviewLastMessageThreadText() =
+    PreviewWrapper {
+        ConversationListItem(
+            model = previewModel(
+                displayName = "Team",
+                type = ConversationEnums.ConversationType.ROOM_GROUP_CALL,
+                lastMessage = previewMsg(actorDisplayName = "Alice", message = "Replying in thread", hasThread = true)
+            ),
+            currentUser = previewUser(),
+            callbacks = ConversationListItemCallbacks(onClick = {}, onLongClick = {})
+        )
+    }
+
+@Preview(name = "G51 - Thread attachment message", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun PreviewLastMessageThreadAttachment() =
+    PreviewWrapper(darkTheme = true) {
+        ConversationListItem(
+            model = previewModel(
+                displayName = "Team",
+                type = ConversationEnums.ConversationType.ROOM_GROUP_CALL,
+                lastMessage = previewMsg(
+                    message = "{file}",
+                    messageParameters = hashMapOf(
+                        "file" to hashMapOf("name" to "report.pdf", "mimetype" to "application/pdf")
+                    ),
+                    hasThread = true
+                )
             ),
             currentUser = previewUser(),
             callbacks = ConversationListItemCallbacks(onClick = {}, onLongClick = {})

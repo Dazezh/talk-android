@@ -12,56 +12,64 @@ import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.setContent
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.fragment.app.DialogFragment
 import autodagger.AutoInjector
 import com.nextcloud.talk.BuildConfig
 import com.nextcloud.talk.R
+import com.nextcloud.talk.activities.BaseActivity
 import com.nextcloud.talk.application.NextcloudTalkApplication
 import com.nextcloud.talk.components.ColoredStatusBar
 import com.nextcloud.talk.ui.dialog.SaveToStorageDialogFragment
-import com.nextcloud.talk.ui.theme.ViewThemeUtils
 import com.nextcloud.talk.utils.AccountUtils.canWeOpenFilesApp
 import com.nextcloud.talk.utils.FileUtils
 import com.nextcloud.talk.utils.Mimetype.TEXT_PREFIX_GENERIC
-import com.nextcloud.talk.utils.adjustUIForAPILevel35
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_ACCOUNT
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_FILE_ID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
-import javax.inject.Inject
+import java.io.IOException
 
 @AutoInjector(NextcloudTalkApplication::class)
-class FullScreenTextViewerActivity : AppCompatActivity() {
+class FullScreenTextViewerActivity : BaseActivity() {
 
-    @Inject
-    lateinit var viewThemeUtils: ViewThemeUtils
     private lateinit var textFile: File
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NextcloudTalkApplication.sharedApplication!!.componentApplication.inject(this)
+        val user = setUpBoundUserOrFinish() ?: return
 
         val fileName = intent.getStringExtra("FILE_NAME").orEmpty()
         val isMarkdown = intent.getBooleanExtra("IS_MARKDOWN", false)
         val fileId = intent.getStringExtra("FILE_ID").orEmpty()
         val link = intent.getStringExtra("LINK")
-        val username = intent.getStringExtra("USERNAME").orEmpty()
-        val baseUrl = intent.getStringExtra("BASE_URL").orEmpty()
+        val username = user.username.orEmpty()
+        val baseUrl = user.baseUrl.orEmpty()
         textFile = FileUtils.resolveSharedAttachmentFile(applicationContext.cacheDir, fileName) ?: run {
             Log.e(TAG, "Invalid text filename: $fileName")
             finish()
             return
         }
-        val text = readFile(textFile)
-
-        adjustUIForAPILevel35()
-
         setContent {
             val colorScheme = viewThemeUtils.getColorScheme(this)
+            val text by produceState<String?>(null, textFile) {
+                value = withContext(Dispatchers.IO) { readTextFileOrNull(textFile) } ?: run {
+                    // the system may clear the cache directory while the viewer is not on screen
+                    Log.e(TAG, "Could not read the text file: ${textFile.name}")
+                    Toast.makeText(this@FullScreenTextViewerActivity, R.string.nc_common_error_sorry, Toast.LENGTH_LONG)
+                        .show()
+                    finish()
+                    null
+                }
+            }
             MaterialTheme(colorScheme = colorScheme) {
                 ColoredStatusBar()
                 FullScreenTextScreen(
@@ -117,9 +125,15 @@ class FullScreenTextViewerActivity : AppCompatActivity() {
         saveFragment.show(supportFragmentManager, SaveToStorageDialogFragment.TAG)
     }
 
-    private fun readFile(file: File) = file.inputStream().readBytes().toString(Charsets.UTF_8)
-
     companion object {
         private val TAG = FullScreenTextViewerActivity::class.java.simpleName
+
+        internal fun readTextFileOrNull(file: File): String? =
+            try {
+                file.inputStream().use { it.readBytes().toString(Charsets.UTF_8) }
+            } catch (e: IOException) {
+                Log.w(TAG, "Failed to read the text file", e)
+                null
+            }
     }
 }

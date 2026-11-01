@@ -10,7 +10,7 @@ import android.app.Application
 import com.nextcloud.talk.api.NcApiCoroutines
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.logger.Logger
-import com.nextcloud.talk.models.json.capabilities.Capabilities
+import com.nextcloud.talk.models.json.capabilities.CapabilitiesDto
 import com.nextcloud.talk.models.json.capabilities.RStikerCapability
 import com.nextcloud.talk.models.json.capabilities.StickersCapability
 import com.nextcloud.talk.models.json.stickers.StickerLibraryCacheJson
@@ -241,7 +241,7 @@ class StickerRepositoryImplTest {
             username = "alice",
             baseUrl = "https://cloud.example.com",
             token = "token",
-            capabilities = Capabilities(
+            capabilities = CapabilitiesDto(
                 coreCapability = null,
                 spreedCapability = null,
                 notificationsCapability = null,

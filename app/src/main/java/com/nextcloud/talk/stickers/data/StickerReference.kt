@@ -6,7 +6,7 @@
  */
 package com.nextcloud.talk.stickers.data
 
-import com.nextcloud.talk.models.json.opengraph.Reference
+import com.nextcloud.talk.models.json.opengraph.ReferenceDto
 
 internal const val R_STIKER_RICH_OBJECT_TYPE = "r-stiker"
 
@@ -15,7 +15,7 @@ internal const val R_STIKER_RICH_OBJECT_TYPE = "r-stiker"
  * The image is served by the instance the sticker lives on, which may differ from the own server when the
  * sticker was received through federation.
  */
-fun Reference.stickerImageUrl(): String? {
+fun ReferenceDto.stickerImageUrl(): String? {
     if (richObjectType != R_STIKER_RICH_OBJECT_TYPE || accessible == false) return null
     return richObject?.sticker?.imageUrl ?: richObject?.sticker?.thumbnailUrl ?: richObject?.thumb
 }

@@ -17,6 +17,7 @@ import com.nextcloud.talk.api.NcApi
 import com.nextcloud.talk.api.NcApiCoroutines
 import com.nextcloud.talk.chat.data.ChatMessageRepository
 import com.nextcloud.talk.chat.data.network.ChatMessageSyncer
+import com.nextcloud.talk.arbitrarystorage.ArbitraryStorageManager
 import com.nextcloud.talk.chat.data.network.ChatNetworkDataSource
 import com.nextcloud.talk.chat.data.network.OfflineFirstChatRepository
 import com.nextcloud.talk.logger.Logger
@@ -214,6 +215,7 @@ class RepositoryModule {
         networkMonitor: NetworkMonitor,
         chatMessageSyncer: ChatMessageSyncer,
         conversationListUpdater: ConversationListUpdater,
+        arbitraryStorageManager: ArbitraryStorageManager,
         context: Context,
         logger: Logger
     ): OfflineConversationsRepository =
@@ -224,6 +226,7 @@ class RepositoryModule {
             networkMonitor,
             chatMessageSyncer,
             conversationListUpdater,
+            arbitraryStorageManager,
             context,
             logger
         )

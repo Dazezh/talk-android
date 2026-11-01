@@ -836,4 +836,85 @@
         <item quantity="one">%d stemme</item>
         <item quantity="other">%d stemmer</item>
     </plurals>
+    <string name="nc_call_button_content_description_switch_camera">Skift kamera</string>
+    
+    <string name="nc_call_e2ee_not_supported">Opkald understøttes ikke i øjeblikket, fordi end-to-end-kryptering er slået til på serveren</string>
+    
+    <string name="nc_call_e2ee_not_supported_title">Opkald fra %s er ikke tilgængeligt</string>
+    
+    <string name="nc_call_join_failed">Kunne ikke deltage i opkaldet. Prøv igen.</string>
+    
+    <string name="nc_call_ongoing_notification_return_action">Tilbage til opkaldet</string>
+    
+    <string name="nc_call_self_video_enlarge">Forstør egen video</string>
+    
+    <string name="nc_call_self_video_shrink">Formindsk egen video</string>
+    
+    <string name="nc_classified_conversation_description">Lukket samtale til fortrolige emner, hvor offentlig adgang, gæster, SIP og optagelser er deaktiveret</string>
+    
+    <string name="nc_conversation_created_invalid_participants">Nogle deltagere kunne ikke tilføjes</string>
+    
+    <string name="nc_conversation_created_invalid_participants_named">Disse deltagere kunne ikke tilføjes: %1$s</string>
+    
+    <string name="nc_conversation_created_public">Gæster kan deltage i samtalen via dens link. Del det nu eller senere fra samtaleindstillingerne.</string>
+    
+    <string name="nc_conversation_created_title">Samtalen er oprettet</string>
+    
+    <string name="nc_conversation_type_defaults">Standardindstillinger for denne samtaletype:</string>
+    
+    <string name="nc_conversation_type_defaults_hint">Indstillingerne kan ændres, når samtalen er oprettet</string>
+    
+    <string name="nc_conversation_type_lobby">Lobby slået til, så samtalen er begrænset til moderatorer</string>
+    
+    <string name="nc_conversation_type_mentions_moderators">Kun moderatorer må omtale alle</string>
+    
+    <string name="nc_conversation_type_message_expiration">Beskeder udløber efter %1$s</string>
+    
+    <string name="nc_conversation_type_message_expiration_custom">Udløb af beskeder er slået til</string>
+    
+    <string name="nc_conversation_type_sip">Telefon- og SIP-indringning slået til</string>
+    
+    <string name="nc_conversation_type_sip_no_pin">Indringning uden PIN-kode tilladt</string>
+    
+    <string name="nc_conversation_types_error">Samtaletyperne kunne ikke indlæses</string>
+    
+    <string name="nc_file_permission_editable">Kan redigeres</string>
+    
+    <string name="nc_file_permission_view_only">Kun visning</string>
+    
+    <string name="nc_login_too_many_attempts">For mange mislykkede loginforsøg fra dette netværk. Prøv igen senere.</string>
+    
+    <string name="nc_logs_share_no_app_found">Der blev ikke fundet en app til at sende rapporten.</string>
+    
+    <string name="nc_message_not_added_to_notes">Beskeden kunne ikke tilføjes til noter</string>
+    
+    <string name="nc_notification_channel_calls_ongoing">Igangværende opkald</string>
+    
+    <string name="nc_notification_channel_calls_ongoing_description">Vedvarende status for et opkald i gang</string>
+    
+    <string name="nc_notification_permission_hint">Giv tilladelsen \"Notifikationer\", så der kan vises notifikationer om opkald, og opkald kan holdes aktive i baggrunden.</string>
+    
+    <string name="nc_password_required">Denne server kræver en adgangskode til samtaler, som gæster kan deltage i</string>
+    
+    <string name="nc_password_secure">Adgangskoden er sikker</string>
+    
+    <string name="nc_presentation_description">Begrænset samtale til interne præsentationer</string>
+    
+    <string name="nc_reauthorize_different_account">Du loggede ind med en anden konto. Log ind med den konto, du vil godkende igen.</string>
+    
+    <string name="nc_webinar_description">Begrænset samtale med lobby slået til, ideel til offentlige webinarer</string>
+    
+    <string name="play_pause_audio_file">Afspil/sæt lydfil på pause</string>
+    
+    <string name="reaction_add_failed">Reaktionen kunne ikke tilføjes</string>
+    
+    <string name="reaction_delete_failed">Reaktionen kunne ikke fjernes</string>
+    
+    <string name="thread">Tråd</string>
+    
+    <plurals name="nc_new_messages_count">
+        <item quantity="one">%d ny besked</item>
+        <item quantity="other">%d nye beskeder</item>
+    </plurals>
+    
 </resources>

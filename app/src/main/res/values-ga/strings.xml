@@ -150,6 +150,7 @@
     <string name="nc_call_button_content_description_hangup">Croch suas</string>
     <string name="nc_call_button_content_description_microphone">Scoránaigh micreafón</string>
     <string name="nc_call_button_content_description_pip">Oscail mód pictiúr-i-pictiúr</string>
+    <string name="nc_call_button_content_description_switch_camera">Athraigh ceamara</string>
     <string name="nc_call_button_content_description_switch_to_self_vide">Athraigh go físeán féin</string>
     <string name="nc_call_e2ee_not_supported">Ní thacaítear le glaonna faoi láthair toisc go bhfuil criptiú ceann go ceann cumasaithe ar an bhfreastalaí.</string>
     <string name="nc_call_e2ee_not_supported_title">Níl glao ó %s ar fáil</string>
@@ -365,6 +366,7 @@
     <string name="nc_location_unknown">Post anaithnid</string>
     <string name="nc_locked">Faoi ghlas</string>
     <string name="nc_locked_tap_to_unlock">Tapáil chun díghlasáil</string>
+    <string name="nc_login_too_many_attempts">An iomarca iarrachtaí logála isteach nár éirigh leo ón líonra seo. Bain triail as arís níos déanaí.</string>
     <string name="nc_logs_advanced_logging">Logáil ardleibhéil</string>
     <string name="nc_logs_advanced_logging_disable">Díchumasaigh logáil ardleibhéil</string>
     <string name="nc_logs_advanced_logging_enable">Cumasaigh logáil ardleibhéil</string>
@@ -475,6 +477,7 @@
     <string name="nc_push_notification_error">Ár leithscéal, chuaigh rud éigin mícheart, is é %1$s an earráid</string>
     <string name="nc_push_notification_fetch_error">Tá brón orm gur tharla rud éigin mícheart, ní féidir teachtaireacht tástála a fháil</string>
     <string name="nc_push_notification_message">Tá fógra brú seolta go rathúil. Ba chóir duit fógra a fháil anois ar an ngléas seo leis an teideal \'Fógraí brú á dtástáil\'.</string>
+    <string name="nc_reauthorize_different_account">Logáil tú isteach le cuntas eile. Logáil isteach leis an gcuntas ar mhaith leat athúdarú a dhéanamh air.</string>
     <string name="nc_remind">Agus an micreafón díchumasaithe, cliceáil agus coinneáil chun Brúigh chun Caint a úsáid</string>
     <string name="nc_remote_wipe_logged_out">Ní raibh dintiúir an chuntais seo bailí a thuilleadh</string>
     <string name="nc_remove_color">Bain dath</string>

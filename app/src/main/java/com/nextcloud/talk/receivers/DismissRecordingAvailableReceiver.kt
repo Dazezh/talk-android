@@ -21,11 +21,11 @@ import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.bundle.BundleKeys
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_INTERNAL_USER_ID
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_SYSTEM_NOTIFICATION_ID
-import com.nextcloud.talk.utils.database.user.CurrentUserProviderOld
 import io.reactivex.Observer
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @AutoInjector(NextcloudTalkApplication::class)
@@ -33,9 +33,6 @@ class DismissRecordingAvailableReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var userManager: UserManager
-
-    @Inject
-    lateinit var currentUserProvider: CurrentUserProviderOld
 
     @Inject
     lateinit var ncApi: NcApi
@@ -57,8 +54,11 @@ class DismissRecordingAvailableReceiver : BroadcastReceiver() {
         systemNotificationId = intent!!.getIntExtra(KEY_SYSTEM_NOTIFICATION_ID, 0)
         link = intent.getStringExtra(BundleKeys.KEY_DISMISS_RECORDING_URL)
 
-        val id = intent.getLongExtra(KEY_INTERNAL_USER_ID, currentUserProvider.currentUser.blockingGet().id!!)
-        currentUser = userManager.getUserWithId(id).blockingGet()
+        val id = intent.getLongExtra(KEY_INTERNAL_USER_ID, 0L)
+        currentUser = runBlocking { userManager.getUserWithId(id) } ?: run {
+            Log.e(TAG, "No user found for id $id")
+            return
+        }
 
         dismissNcRecordingAvailableNotification()
     }

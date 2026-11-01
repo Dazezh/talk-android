@@ -9,6 +9,7 @@ package com.nextcloud.talk.ui.chooseaccount
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.ui.chooseaccount.model.ChooseAccountShareToViewState
 import com.nextcloud.talk.ui.chooseaccount.model.LoadUsersStartStateChooseAccountShareTo
@@ -16,65 +17,63 @@ import com.nextcloud.talk.ui.chooseaccount.model.LoadUsersSuccessStateChooseAcco
 import com.nextcloud.talk.ui.chooseaccount.model.SwitchUserErrorStateChooseAccountShareTo
 import com.nextcloud.talk.ui.chooseaccount.model.SwitchUserSuccessStateChooseAccountShareTo
 import com.nextcloud.talk.users.UserManager
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.schedulers.Schedulers
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
+import kotlinx.coroutines.launch
 
-class ChooseAccountShareToViewModel @Inject constructor(private val userManager: UserManager) : ViewModel() {
-
-    val currentUser: User? = userManager.currentUser.blockingGet()
+/**
+ * Lets the conversation list of [currentUser] continue a pending share with another account.
+ */
+class ChooseAccountShareToViewModel @AssistedInject constructor(
+    private val userManager: UserManager,
+    @Assisted val currentUser: User
+) : ViewModel() {
 
     private val _chooseAccountShareToViewState: MutableStateFlow<ChooseAccountShareToViewState> =
         MutableStateFlow(LoadUsersStartStateChooseAccountShareTo)
     val chooseAccountShareToViewState: StateFlow<ChooseAccountShareToViewState> =
         _chooseAccountShareToViewState.asStateFlow()
 
-    private val disposables = CompositeDisposable()
-
+    @Suppress("TooGenericExceptionCaught")
     fun loadUsers() {
         _chooseAccountShareToViewState.value = LoadUsersStartStateChooseAccountShareTo
-        disposables.add(
-            userManager.users
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(
-                    { users ->
-                        _chooseAccountShareToViewState.value =
-                            LoadUsersSuccessStateChooseAccountShareTo(users.filter { !it.current })
-                    },
-                    { e ->
-                        Log.e(TAG, "Error loading users", e)
-                        _chooseAccountShareToViewState.value = LoadUsersSuccessStateChooseAccountShareTo(emptyList())
-                    }
-                )
-        )
+        viewModelScope.launch {
+            try {
+                val users = userManager.getUsers()
+                _chooseAccountShareToViewState.value =
+                    LoadUsersSuccessStateChooseAccountShareTo(users.filter { it.id != currentUser.id })
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading users", e)
+                _chooseAccountShareToViewState.value = LoadUsersSuccessStateChooseAccountShareTo(emptyList())
+            }
+        }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     fun switchToUser(user: User) {
-        disposables.add(
-            userManager.setUserAsActive(user)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread()).subscribe({ success ->
-                    _chooseAccountShareToViewState.value =
-                        if (success) {
-                            SwitchUserSuccessStateChooseAccountShareTo
-                        } else {
-                            SwitchUserErrorStateChooseAccountShareTo
-                        }
-                }, { e ->
-                    Log.e(TAG, "Error switching user", e)
-                    _chooseAccountShareToViewState.value = SwitchUserErrorStateChooseAccountShareTo
-                })
-        )
+        viewModelScope.launch {
+            try {
+                val success = userManager.setUserAsActive(user)
+                _chooseAccountShareToViewState.value =
+                    if (success) {
+                        SwitchUserSuccessStateChooseAccountShareTo(user)
+                    } else {
+                        SwitchUserErrorStateChooseAccountShareTo
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error switching user", e)
+                _chooseAccountShareToViewState.value = SwitchUserErrorStateChooseAccountShareTo
+            }
+        }
     }
 
-    override fun onCleared() {
-        disposables.dispose()
-        super.onCleared()
+    @AssistedFactory
+    interface Factory {
+        fun build(user: User): ChooseAccountShareToViewModel
     }
 
     companion object {

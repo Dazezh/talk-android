@@ -43,6 +43,7 @@ import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.work.OneTimeWorkRequest
+import com.nextcloud.talk.utils.bundle.BundleKeys
 import com.nextcloud.talk.utils.setExpeditedIfSupported
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -72,7 +73,7 @@ import com.nextcloud.talk.logger.Level
 import com.nextcloud.talk.logger.LogsRepository
 import com.nextcloud.talk.logger.ui.LogsActivity
 import com.nextcloud.talk.jobs.AccountRemovalWorker
-import com.nextcloud.talk.jobs.CapabilitiesWorker
+import com.nextcloud.talk.jobs.CapabilitiesSyncWorker
 import com.nextcloud.talk.jobs.ContactAddressBookWorker
 import com.nextcloud.talk.jobs.ContactAddressBookWorker.Companion.checkPermission
 import com.nextcloud.talk.jobs.ContactAddressBookWorker.Companion.deleteAll
@@ -81,7 +82,6 @@ import com.nextcloud.talk.models.json.userprofile.UserProfileOverall
 import com.nextcloud.talk.profile.ProfileActivity
 import com.nextcloud.talk.settings.chat.ChatSettingsActivity
 import com.nextcloud.talk.ui.dialog.SetPhoneNumberDialogFragment
-import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
 import com.nextcloud.talk.utils.ClosedInterfaceImpl
@@ -108,6 +108,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -133,9 +134,6 @@ class SettingsActivity :
 
     @Inject
     lateinit var ncApiCoroutines: NcApiCoroutines
-
-    @Inject
-    lateinit var userManager: UserManager
 
     @Inject
     lateinit var platformPermissionUtil: PlatformPermissionUtil
@@ -175,6 +173,7 @@ class SettingsActivity :
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NextcloudTalkApplication.sharedApplication!!.componentApplication.inject(this)
+        setCurrentUser(setUpBoundUserOrFinish() ?: return)
         networkMonitor.isOnlineLiveData.observe(this) { online ->
             isOnline.value = online
             handleNetworkChange(isOnline.value)
@@ -187,7 +186,6 @@ class SettingsActivity :
 
         binding.avatarImage.let { ViewCompat.setTransitionName(it, "userAvatar.transitionTag") }
 
-        getCurrentUser()
         handleIntent(intent)
 
         setupLicenceSetting(isOnline.value)
@@ -282,6 +280,7 @@ class SettingsActivity :
         binding.settingsName.visibility = View.VISIBLE
         binding.settingsName.setOnClickListener {
             val intent = Intent(this, ProfileActivity::class.java)
+            intent.putExtra(BundleKeys.KEY_INTERNAL_USER_ID, currentUser!!.id)
             startActivity(intent)
         }
 
@@ -315,15 +314,14 @@ class SettingsActivity :
     }
 
     private fun loadCapabilitiesAndUpdateSettings(isOnline: Boolean) {
-        val capabilitiesWork = OneTimeWorkRequest.Builder(CapabilitiesWorker::class.java)
+        val capabilitiesWork = OneTimeWorkRequest.Builder(CapabilitiesSyncWorker::class.java)
             .setExpeditedIfSupported()
             .build()
         WorkManager.getInstance(context).enqueue(capabilitiesWork)
 
         WorkManager.getInstance(context).getWorkInfoByIdLiveData(capabilitiesWork.id)
             .observe(this) { workInfo ->
-                if (workInfo?.state == WorkInfo.State.SUCCEEDED) {
-                    getCurrentUser()
+                if (workInfo?.state == WorkInfo.State.SUCCEEDED && reloadCurrentUser()) {
                     setupCheckables(isOnline)
                 }
             }
@@ -341,9 +339,22 @@ class SettingsActivity :
         viewThemeUtils.material.themeToolbar(binding.settingsToolbar)
     }
 
-    private fun getCurrentUser() {
-        currentUser = currentUserProviderOld.currentUser.blockingGet()
-        credentials = ApiUtils.getCredentials(currentUser!!.username, currentUser!!.token)
+    private fun setCurrentUser(user: User) {
+        currentUser = user
+        credentials = ApiUtils.getCredentials(user.username, user.token)
+    }
+
+    /**
+     * Loads the account of this screen again, e.g. for updated capabilities. Finishes the activity and returns false
+     * if it was removed meanwhile.
+     */
+    private fun reloadCurrentUser(): Boolean {
+        val user = runBlocking { userManager.getUserWithInternalId(resolveUserIdFromIntent()) } ?: run {
+            finish()
+            return false
+        }
+        setCurrentUser(user)
+        return true
     }
 
     private fun setupPhoneBookIntegration(isOnline: Boolean) {
@@ -369,7 +380,7 @@ class SettingsActivity :
 
     private fun showUnifiedPushToggle(): Boolean =
         UnifiedPushUtils.getExternalDistributors(this).isNotEmpty() &&
-            userManager.users.blockingGet().all { it.hasWebPushCapability }
+            runBlocking { userManager.getUsers() }.all { it.hasWebPushCapability }
 
     private fun setupUnifiedPushSettings() {
         // If any user doesn't support web push, or there is no UnifiedPush
@@ -598,7 +609,7 @@ class SettingsActivity :
             intent.putExtra(Settings.EXTRA_APP_PACKAGE, BuildConfig.APPLICATION_ID)
             intent.putExtra(
                 Settings.EXTRA_CHANNEL_ID,
-                NotificationUtils.NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V4.name
+                NotificationUtils.NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V5.name
             )
 
             startActivity(intent)
@@ -637,6 +648,7 @@ class SettingsActivity :
                 }
                 .setNeutralButton(R.string.nc_diagnosis_dialog_open_diagnosis) { _, _ ->
                     val intent = Intent(context, DiagnosisActivity::class.java)
+                    intent.putExtra(BundleKeys.KEY_INTERNAL_USER_ID, currentUser!!.id)
                     startActivity(intent)
                 }
             viewThemeUtils.dialog.colorMaterialAlertDialogBackground(this, dialogBuilder)
@@ -662,14 +674,14 @@ class SettingsActivity :
 
     private fun setupServerNotificationAppCheck() {
         val serverNotificationAppInstalled =
-            currentUserProviderOld.currentUser.blockingGet()
+            currentUser!!
                 .capabilities?.notificationsCapability?.features?.isNotEmpty()
                 ?: false
         if (!serverNotificationAppInstalled) {
             binding.settingsServerNotificationAppWrapper.visibility = View.VISIBLE
 
             val description = context.getString(R.string.nc_settings_contact_admin_of) + LINEBREAK +
-                currentUserProviderOld.currentUser.blockingGet().baseUrl!!
+                currentUser!!.baseUrl!!
 
             binding.settingsServerNotificationAppDescription.text = description
             if (openedByNotificationWarning) {
@@ -698,7 +710,9 @@ class SettingsActivity :
 
     private fun setupDiagnosis() {
         binding.diagnosisWrapper.setOnClickListener {
-            startActivity(Intent(context, DiagnosisActivity::class.java))
+            val intent = Intent(context, DiagnosisActivity::class.java)
+            intent.putExtra(BundleKeys.KEY_INTERNAL_USER_ID, currentUser!!.id)
+            startActivity(intent)
         }
         binding.logsWrapper.setOnClickListener {
             startActivity(Intent(context, LogsActivity::class.java))
@@ -792,7 +806,10 @@ class SettingsActivity :
                     }
                     Log.d(TAG, "host: $host and port: $port")
                     currentUser!!.clientCertificate = finalAlias
-                    userManager.updateOrCreateUser(currentUser!!)
+                    val userId = currentUser!!.id!!
+                    lifecycleScope.launch {
+                        userManager.updateClientCertificate(userId, finalAlias)
+                    }
                 },
                 arrayOf("RSA", "EC"),
                 null,
@@ -884,44 +901,46 @@ class SettingsActivity :
         }
     }
 
-    @SuppressLint("CheckResult", "StringFormatInvalid")
+    @SuppressLint("StringFormatInvalid")
     private fun removeCurrentAccount() {
-        userManager.scheduleUserForDeletionWithId(currentUser!!.id!!).blockingGet()
-        val accountRemovalWork = OneTimeWorkRequest.Builder(AccountRemovalWorker::class.java)
-            .setExpeditedIfSupported()
-            .build()
-        WorkManager.getInstance(applicationContext).enqueue(accountRemovalWork)
+        lifecycleScope.launch {
+            userManager.scheduleUserForDeletionWithId(currentUser!!.id!!)
+            val accountRemovalWork = OneTimeWorkRequest.Builder(AccountRemovalWorker::class.java)
+                .setExpeditedIfSupported()
+                .build()
+            WorkManager.getInstance(applicationContext).enqueue(accountRemovalWork)
 
-        WorkManager.getInstance(context).getWorkInfoByIdLiveData(accountRemovalWork.id)
-            .observeForever { workInfo: WorkInfo? ->
+            WorkManager.getInstance(context).getWorkInfoByIdLiveData(accountRemovalWork.id)
+                .observeForever { workInfo: WorkInfo? ->
 
-                when (workInfo?.state) {
-                    WorkInfo.State.SUCCEEDED -> {
-                        val text = String.format(
-                            context.resources.getString(R.string.nc_deleted_user),
-                            currentUser!!.displayName
-                        )
-                        Toast.makeText(
-                            context,
-                            text,
-                            Toast.LENGTH_LONG
-                        ).show()
-                        restartApp()
+                    when (workInfo?.state) {
+                        WorkInfo.State.SUCCEEDED -> {
+                            val text = String.format(
+                                context.resources.getString(R.string.nc_deleted_user),
+                                currentUser!!.displayName
+                            )
+                            Toast.makeText(
+                                context,
+                                text,
+                                Toast.LENGTH_LONG
+                            ).show()
+                            restartApp()
+                        }
+
+                        WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
+                            Toast.makeText(
+                                context,
+                                context.resources.getString(R.string.nc_common_error_sorry),
+                                Toast.LENGTH_LONG
+                            ).show()
+                            logger.e(TAG, "something went wrong when deleting user with id " + currentUser!!.userId)
+                            restartApp()
+                        }
+
+                        else -> {}
                     }
-
-                    WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                        logger.e(TAG, "something went wrong when deleting user with id " + currentUser!!.userId)
-                        Toast.makeText(
-                            context,
-                            context.resources.getString(R.string.nc_common_error_sorry),
-                            Toast.LENGTH_LONG
-                        ).show()
-                        restartApp()
-                    }
-
-                    else -> {}
                 }
-            }
+        }
     }
 
     private fun restartApp() {
@@ -1115,7 +1134,10 @@ class SettingsActivity :
                     }
                     if ((!TextUtils.isEmpty(displayName) && !(displayName == currentUser!!.displayName))) {
                         currentUser!!.displayName = displayName
-                        userManager.updateOrCreateUser(currentUser!!)
+                        val userId = currentUser!!.id!!
+                        lifecycleScope.launch {
+                            userManager.updateDisplayName(userId, displayName)
+                        }
                         binding.nameText.text = currentUser!!.displayName
                     }
                 },

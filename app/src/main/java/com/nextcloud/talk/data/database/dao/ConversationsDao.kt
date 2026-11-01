@@ -22,13 +22,19 @@ interface ConversationsDao {
     @Query("SELECT * FROM Conversations where accountId = :accountId")
     fun getConversationsForUser(accountId: Long): Flow<List<ConversationEntity>>
 
+    /** The internal ids of [accountId]'s conversations, without loading the conversations themselves. */
+    @Query("SELECT internalId FROM Conversations where accountId = :accountId")
+    suspend fun getConversationIdsForUser(accountId: Long): List<String>
+
     @Query("SELECT * FROM Conversations where accountId = :accountId AND token = :token")
     fun getConversationForUser(accountId: Long, token: String): Flow<ConversationEntity?>
 
     /**
-     * Applies a full room list sync atomically: left conversations are deleted and the server
-     * items are upserted in one transaction, so observers of the conversations table see a single
-     * consistent update per sync instead of intermediate states.
+     * Applies a room list sync atomically: the conversations named in [conversationIdsToDelete] are
+     * deleted and [serverItems] are upserted in one transaction, so observers of the conversations
+     * table see a single consistent update per sync instead of intermediate states.
+     *
+     * Conversations that are named by neither argument are left untouched.
      */
     @Transaction
     suspend fun syncConversationsForUser(

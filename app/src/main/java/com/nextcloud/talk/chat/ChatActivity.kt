@@ -25,7 +25,6 @@ import android.content.pm.PackageManager
 import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.graphics.drawable.Drawable
-import android.location.LocationManager
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -34,7 +33,6 @@ import android.os.Handler
 import android.os.SystemClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
-import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
 import android.view.View
@@ -93,6 +91,7 @@ import androidx.media3.session.SessionToken
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequest
+import com.nextcloud.talk.dagger.modules.assistedViewModels
 import com.nextcloud.talk.utils.setExpeditedIfSupported
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -132,7 +131,6 @@ import com.nextcloud.talk.chat.viewmodels.MessageInputViewModel
 import com.nextcloud.talk.conversationinfo.ConversationInfoActivity
 import com.nextcloud.talk.conversationinfo.viewmodel.ConversationInfoViewModel
 import com.nextcloud.talk.conversationlist.ConversationsListActivity
-import com.nextcloud.talk.dagger.modules.ViewModelFactoryWithParams
 import com.nextcloud.talk.data.database.model.SendStatus
 import com.nextcloud.talk.data.network.NetworkMonitor
 import com.nextcloud.talk.data.user.model.User
@@ -148,12 +146,12 @@ import com.nextcloud.talk.mediaviewer.activities.MediaViewerActivity
 import com.nextcloud.talk.mediaviewer.model.capSeedAroundMessage
 import com.nextcloud.talk.models.ExternalSignalingServer
 import com.nextcloud.talk.models.domain.ConversationModel
-import com.nextcloud.talk.models.json.capabilities.SpreedCapability
-import com.nextcloud.talk.models.json.chat.ChatMessageJson
+import com.nextcloud.talk.models.json.capabilities.SpreedCapabilityDto
+import com.nextcloud.talk.models.json.chat.ChatMessageDto
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
-import com.nextcloud.talk.models.json.participants.Participant
+import com.nextcloud.talk.models.json.participants.ParticipantDto
 import com.nextcloud.talk.models.json.signaling.settings.SignalingSettingsOverall
-import com.nextcloud.talk.models.json.threads.ThreadInfo
+import com.nextcloud.talk.models.json.threads.ThreadInfoDto
 import com.nextcloud.talk.polls.ui.PollCreateDialogFragment
 import com.nextcloud.talk.polls.ui.PollMainDialogFragment
 import com.nextcloud.talk.remotefilebrowser.activities.RemoteFileBrowserActivity
@@ -183,7 +181,7 @@ import com.nextcloud.talk.ui.dialog.SaveToStorageDialogFragment
 import com.nextcloud.talk.stickers.data.StickerImageLoader
 import com.nextcloud.talk.stickers.ui.LocalStickerImageLoader
 import com.nextcloud.talk.ui.theme.LocalMessageUtils
-import com.nextcloud.talk.ui.theme.LocalReferenceResolver
+import com.nextcloud.talk.ui.theme.LocalOpenGraphFetcher
 import com.nextcloud.talk.ui.theme.GlassTokens
 import com.nextcloud.talk.ui.theme.LocalViewThemeUtils
 import com.nextcloud.talk.utils.ApiUtils
@@ -221,6 +219,7 @@ import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_ROOM_TOKEN
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_START_CALL_AFTER_ROOM_SWITCH
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_SWITCH_TO_ROOM
 import com.nextcloud.talk.utils.bundle.BundleKeys.KEY_THREAD_ID
+import com.nextcloud.talk.utils.keepContentOutOfDisplayCutout
 import com.nextcloud.talk.utils.permissions.PlatformPermissionUtil
 import com.nextcloud.talk.utils.preferences.RalkAppearancePreferences
 import com.nextcloud.talk.utils.rx.DisposableSet
@@ -263,9 +262,9 @@ import java.time.ZonedDateTime
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ExecutionException
 import javax.inject.Inject
-import java.util.concurrent.CancellationException
 import kotlin.math.abs
 
 @Suppress("TooManyFunctions", "LargeClass", "LongMethod")
@@ -311,13 +310,18 @@ class ChatActivity :
     @Inject
     lateinit var chatViewModelFactory: ChatViewModel.ChatViewModelFactory
 
-    val chatViewModel: ChatViewModel by viewModels {
-        ViewModelFactoryWithParams(ChatViewModel::class.java) {
-            chatViewModelFactory.build(
-                roomToken,
-                conversationThreadId
-            )
-        }
+    /**
+     * The user of this chat as loaded in [onCreate], used to create [chatViewModel]. Afterwards use
+     * [conversationUser], which reflects later changes of the stored user.
+     */
+    private lateinit var initialUser: User
+
+    val chatViewModel: ChatViewModel by assistedViewModels {
+        chatViewModelFactory.build(
+            initialUser,
+            roomToken,
+            conversationThreadId
+        )
     }
 
     lateinit var conversationInfoViewModel: ConversationInfoViewModel
@@ -380,6 +384,8 @@ class ChatActivity :
             ?: error("roomToken missing")
     }
 
+    val conversationUserId: Long by lazy { resolveUserIdFromIntent() }
+
     val conversationThreadId: Long? by lazy {
         if (intent.hasExtra(KEY_THREAD_ID)) {
             intent.getLongExtra(KEY_THREAD_ID, 0L)
@@ -389,9 +395,10 @@ class ChatActivity :
     }
 
     var openedViaNotification: Boolean = false
-    var conversationThreadInfo: ThreadInfo? = null
-    lateinit var conversationUser: User
-    lateinit var spreedCapabilities: SpreedCapability
+    var conversationThreadInfo: ThreadInfoDto? = null
+    val conversationUser: User
+        get() = chatViewModel.currentUser
+    lateinit var spreedCapabilities: SpreedCapabilityDto
     var chatApiVersion: Int = 1
     private var roomPassword: String = ""
     var credentials: String? = null
@@ -409,6 +416,10 @@ class ChatActivity :
     private lateinit var path: String
 
     var myFirstMessage: CharSequence? = null
+    private var isLeavingRoom: Boolean = false
+    private var isScreenResumed: Boolean = false
+    private var hasBeenPaused: Boolean = false
+    private var isInitialLoadDone: Boolean = false
 
     private var lastHandledHighlightNonce: Long? = null
     private var pendingHighlightedMessageId: Long? = null
@@ -521,6 +532,7 @@ class ChatActivity :
                 onBackPressedDispatcher.onBackPressed()
             } else {
                 val intent = Intent(this@ChatActivity, ConversationsListActivity::class.java)
+                intent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 startActivity(intent)
                 finish()
@@ -531,6 +543,22 @@ class ChatActivity :
     private lateinit var messageInputFragment: MessageInputFragment
 
     val typingParticipants = HashMap<String, TypingParticipant>()
+
+    private val leaveRoomObserver = androidx.lifecycle.Observer<ChatViewModel.ViewState> { state ->
+        when (state) {
+            is ChatViewModel.LeaveRoomSuccessState -> {
+                logConversationInfos("leaveRoom#onNext")
+
+                // a return to the chat during the leave resets isLeavingRoom and starts the room timer again
+                if (isLeavingRoom) {
+                    getRoomInfoTimerHandler?.removeCallbacksAndMessages(null)
+                }
+                isLeavingRoom = false
+            }
+
+            else -> {}
+        }
+    }
 
     private val localParticipantMessageListener = SignalingMessageReceiver.LocalParticipantMessageListener { token ->
         if (CallActivity.active) {
@@ -581,7 +609,7 @@ class ChatActivity :
             }
         }
 
-        override fun onChatMessagesReceived(chatMessages: List<ChatMessageJson>) {
+        override fun onChatMessagesReceived(chatMessages: List<ChatMessageDto>) {
             chatViewModel.onSignalingChatMessageReceived(chatMessages)
             Log.d(TAG, "received signaling message in ChatActivity")
         }
@@ -590,9 +618,13 @@ class ChatActivity :
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NextcloudTalkApplication.sharedApplication!!.componentApplication.inject(this)
+        // Not loaded in a coroutine: initData() must have run before onResume() (activity and ChatViewModel),
+        // and registerForActivityResult() must be called before the activity is started.
+        initialUser = setUpBoundUserOrFinish() ?: return
 
         binding = ActivityChatBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        keepContentOutOfDisplayCutout()
 
         setupChatToolbarView()
         setupChatEmptyStateView()
@@ -635,62 +667,49 @@ class ChatActivity :
             overflowContainerHeightPx.intValue = binding.chatOverflowContainer.height
         }
 
-        lifecycleScope.launch {
-            currentUserProvider.getCurrentUser()
-                .onSuccess { user ->
-                    conversationUser = user
-                    handleIntent(intent)
-                    applyChatWallpaper()
-                    val urlForChatting = ApiUtils.getUrlForChat(chatApiVersion, conversationUser?.baseUrl, roomToken)
-                    val credentials = ApiUtils.getCredentials(conversationUser!!.username, conversationUser!!.token)
+        handleIntent(intent)
+        chatViewModel.initData()
+        if (sharedText.isNotEmpty()) {
+            chatViewModel.messageDraft.messageText = sharedText
+            chatViewModel.saveMessageDraft()
+        }
 
-                    chatViewModel.initData(
-                        user,
-                        credentials!!,
-                        urlForChatting,
-                        conversationThreadId
-                    )
+        applyChatWallpaper()
 
-                    conversationThreadId?.let {
-                        val threadUrl = ApiUtils.getUrlForThread(
-                            version = 1,
-                            baseUrl = conversationUser!!.baseUrl,
-                            token = roomToken,
-                            threadId = it.toInt()
-                        )
-                        chatViewModel.getThread(credentials, threadUrl)
-                    }
+        conversationThreadId?.let {
+            val threadUrl = ApiUtils.getUrlForThread(
+                version = 1,
+                baseUrl = conversationUser.baseUrl,
+                token = roomToken,
+                threadId = it.toInt()
+            )
+            chatViewModel.getThread(conversationUser.getCredentials(), threadUrl)
+        }
 
-                    messageInputFragment = getMessageInputFragment()
-                    messageInputViewModel.setData(chatViewModel.getChatRepository())
+        messageInputFragment = getMessageInputFragment()
+        messageInputViewModel.setData(chatViewModel.getChatRepository())
 
-                    initObservers()
+        initObservers()
 
-                    pendingTargetMessageId?.let { messageId ->
-                        lifecycleScope.launch {
-                            chatViewModel.openMessageFromGlobalSearch(
-                                messageId = messageId,
-                                threadId = pendingTargetThreadId,
-                                searchQuery = pendingTargetSearchQuery
-                            )
-                        }
-                        pendingTargetMessageId = null
-                        pendingTargetThreadId = null
-                        pendingTargetSearchQuery = null
-                    }
+        pendingTargetMessageId?.let { messageId ->
+            lifecycleScope.launch {
+                chatViewModel.openMessageFromGlobalSearch(
+                    messageId = messageId,
+                    threadId = pendingTargetThreadId,
+                    searchQuery = pendingTargetSearchQuery
+                )
+            }
+            pendingTargetMessageId = null
+            pendingTargetThreadId = null
+            pendingTargetSearchQuery = null
+        }
 
-                    pickMultipleMedia = registerForActivityResult(
-                        ActivityResultContracts.PickMultipleVisualMedia(MAX_AMOUNT_MEDIA_FILE_PICKER)
-                    ) { uris ->
-                        if (uris.isNotEmpty()) {
-                            onChooseFileResult(uris)
-                        }
-                    }
-                }
-                .onFailure {
-                    logger.e(TAG, "Failed to register media picker activity result launcher", it)
-                    Snackbar.make(binding.root, R.string.nc_common_error_sorry, Snackbar.LENGTH_LONG).show()
-                }
+        pickMultipleMedia = registerForActivityResult(
+            ActivityResultContracts.PickMultipleVisualMedia(MAX_AMOUNT_MEDIA_FILE_PICKER)
+        ) { uris ->
+            if (uris.isNotEmpty()) {
+                onChooseFileResult(uris)
+            }
         }
 
         onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
@@ -758,10 +777,7 @@ class ChatActivity :
      * loses its structure.
      */
     private fun applyChatWallpaper() {
-        val wallpaperPath = RalkAppearancePreferences(this).wallpaperPath
-        if (wallpaperPath == null || !::conversationUser.isInitialized) {
-            return
-        }
+        val wallpaperPath = RalkAppearancePreferences(this).wallpaperPath ?: return
         val host: View = binding.chatContainer
 
         lifecycleScope.launch {
@@ -801,9 +817,7 @@ class ChatActivity :
 
     private fun scrollToMessageById(messageId: Long, logMiss: Boolean = true): Boolean {
         val items = chatViewModel.uiState.value.items
-        val targetIndex = items.indexOfFirst { item ->
-            (item as? ChatViewModel.ChatItem.MessageItem)?.uiMessage?.id == messageId.toInt()
-        }
+        val targetIndex = items.indexOfFirst { it.containsMessage(messageId.toInt()) }
         val listState = chatListState
         val composeScope = chatListComposeScope
         val isReadyToScroll = targetIndex >= 0 && listState != null && composeScope != null
@@ -870,9 +884,7 @@ class ChatActivity :
 
             if (attempt < SEARCH_CENTER_STABILIZE_ATTEMPTS - 1) {
                 delay(SEARCH_CENTER_STABILIZE_DELAY_MS)
-                targetIndex = chatViewModel.uiState.value.items.indexOfFirst { item ->
-                    (item as? ChatViewModel.ChatItem.MessageItem)?.uiMessage?.id == messageId.toInt()
-                }
+                targetIndex = chatViewModel.uiState.value.items.indexOfFirst { it.containsMessage(messageId.toInt()) }
             }
         }
     }
@@ -941,7 +953,7 @@ class ChatActivity :
                 CompositionLocalProvider(
                     LocalViewThemeUtils provides viewThemeUtils,
                     LocalMessageUtils provides messageUtils,
-                    LocalReferenceResolver provides { url -> chatViewModel.fetchReference(url) },
+                    LocalOpenGraphFetcher provides { url -> chatViewModel.fetchOpenGraph(url) },
                     LocalStickerImageLoader provides { url, credentials -> stickerImageLoader.load(url, credentials) },
                     LocalUploadProgressProvider provides { refId -> uploadProgressMap[refId] },
                     LocalUploadedLocalPreviewProvider provides { refId -> uploadedLocalPreviewMap[refId] }
@@ -1016,19 +1028,15 @@ class ChatActivity :
                     value = reactionsSheetMessageId?.let { id -> chatViewModel.getMessageById(id).first() }
                 }
                 reactionsSheetMessage?.let { msg ->
-                    if (::conversationUser.isInitialized) {
-                        conversationUser.let { user ->
-                            ShowReactionsModalBottomSheet(
-                                chatMessage = msg,
-                                user = user,
-                                roomToken = roomToken,
-                                hasReactPermission = participantPermissions?.hasReactPermission() == true,
-                                ncApiCoroutines = ncApiCoroutines,
-                                onDeleteReaction = { emoji -> chatViewModel.deleteReaction(roomToken, msg, emoji) },
-                                onDismiss = { chatViewModel.dismissReactionsSheet() }
-                            )
-                        }
-                    }
+                    ShowReactionsModalBottomSheet(
+                        chatMessage = msg,
+                        user = conversationUser,
+                        roomToken = roomToken,
+                        hasReactPermission = participantPermissions?.hasReactPermission() == true,
+                        ncApiCoroutines = ncApiCoroutines,
+                        onDeleteReaction = { emoji -> chatViewModel.deleteReaction(roomToken, msg, emoji) },
+                        onDismiss = { chatViewModel.dismissReactionsSheet() }
+                    )
                 }
 
                 val profileSheetMessageId by chatViewModel.profileSheetMessageId.collectAsStateWithLifecycle()
@@ -1039,17 +1047,13 @@ class ChatActivity :
                     ?.takeIf { it.actorType.equals("users") }
                     ?.let { msg ->
                         val actorId = msg.actorId ?: return@let
-                        if (::conversationUser.isInitialized) {
-                            conversationUser.let { user ->
-                                ProfileModalBottomSheet(
-                                    actorId = actorId,
-                                    user = user,
-                                    ncApiCoroutines = ncApiCoroutines,
-                                    onTalkTo = { actorId -> startDirectChat(actorId) },
-                                    onDismiss = { chatViewModel.dismissProfileSheet() }
-                                )
-                            }
-                        }
+                        ProfileModalBottomSheet(
+                            actorId = actorId,
+                            user = conversationUser,
+                            ncApiCoroutines = ncApiCoroutines,
+                            onTalkTo = { actorId -> startDirectChat(actorId) },
+                            onDismiss = { chatViewModel.dismissProfileSheet() }
+                        )
                     }
 
                 val messageActionsMessageId by chatViewModel.messageActionsMessageId.collectAsStateWithLifecycle()
@@ -1065,11 +1069,7 @@ class ChatActivity :
                             showEdit = sendingFailed || !isOnline,
                             showDelete = sendingFailed || !isOnline,
                             onResend = {
-                                chatViewModel.resendMessage(
-                                    conversationUser!!.getCredentials(),
-                                    ApiUtils.getUrlForChat(chatApiVersion, conversationUser!!.baseUrl!!, roomToken),
-                                    msg
-                                )
+                                chatViewModel.resendMessage(msg)
                             },
                             onEdit = { messageInputViewModel.edit(msg) },
                             onDelete = { chatViewModel.deleteTempMessage(msg) },
@@ -1077,62 +1077,58 @@ class ChatActivity :
                             onDismiss = { chatViewModel.dismissMessageActions() }
                         )
                     } else {
-                        if (::conversationUser.isInitialized) {
-                            conversationUser.let { user ->
-                                MessageActionsBottomSheet(
-                                    actionsState = buildMessageActionsState(
-                                        message = msg,
-                                        user = user,
-                                        conversation = currentConversation,
-                                        hasChatPermission = participantPermissions?.hasChatPermission() == true,
-                                        hasReactPermission = participantPermissions?.hasReactPermission() == true,
-                                        spreedCapabilities = spreedCapabilities,
-                                        isOnline = isOnline,
-                                        dateUtils = dateUtils,
-                                        conversationThreadId = conversationThreadId
-                                    ),
-                                    onEmojiClick = { emoji ->
-                                        if (msg.reactionsSelf?.contains(emoji) == true) {
-                                            chatViewModel.deleteReaction(roomToken, msg, emoji)
-                                        } else {
-                                            chatViewModel.addReaction(roomToken, msg, emoji)
-                                        }
-                                    },
-                                    onReply = {
-                                        if (msg.isThread && conversationThreadId == null) {
-                                            openThread(msg)
-                                        } else {
-                                            messageInputViewModel.reply(msg)
-                                        }
-                                    },
-                                    onReplyPrivately = { replyPrivately(msg) },
-                                    onOpenThread = { msg.threadId?.let { openThread(it) } },
-                                    onForward = { forwardMessage(msg) },
-                                    onEdit = { messageInputViewModel.edit(msg) },
-                                    onCopy = { copyMessage(msg) },
-                                    onCopyMessageLink = { copyMessageLink(msg) },
-                                    onMarkAsUnread = { markAsUnread(msg) },
-                                    onRemind = { remindMeLater(msg) },
-                                    onPin = { pinMessage(msg) },
-                                    onUnpin = { unPinMessage(msg) },
-                                    onTranslate = { translateMessage(msg) },
-                                    onShareToNote = { shareToNotes(msg) },
-                                    onShare = {
-                                        if (msg.getCalculateMessageType() ==
-                                            ChatMessage.MessageType.SINGLE_NC_ATTACHMENT_MESSAGE
-                                        ) {
-                                            checkIfSharable(msg)
-                                        } else {
-                                            msg.message?.let { shareMessageText(it) }
-                                        }
-                                    },
-                                    onSave = { checkIfSaveable(msg) },
-                                    onOpenInFiles = { openInFilesApp(msg) },
-                                    onDelete = { deleteMessage(msg) },
-                                    onDismiss = { chatViewModel.dismissMessageActions() }
-                                )
-                            }
-                        }
+                        MessageActionsBottomSheet(
+                            actionsState = buildMessageActionsState(
+                                message = msg,
+                                user = conversationUser,
+                                conversation = currentConversation,
+                                hasChatPermission = participantPermissions?.hasChatPermission() == true,
+                                hasReactPermission = participantPermissions?.hasReactPermission() == true,
+                                spreedCapabilities = spreedCapabilities,
+                                isOnline = isOnline,
+                                dateUtils = dateUtils,
+                                conversationThreadId = conversationThreadId
+                            ),
+                            onEmojiClick = { emoji ->
+                                if (msg.reactionsSelf?.contains(emoji) == true) {
+                                    chatViewModel.deleteReaction(roomToken, msg, emoji)
+                                } else {
+                                    chatViewModel.addReaction(roomToken, msg, emoji)
+                                }
+                            },
+                            onReply = {
+                                if (msg.isThread && conversationThreadId == null) {
+                                    openThread(msg)
+                                } else {
+                                    messageInputViewModel.reply(msg)
+                                }
+                            },
+                            onReplyPrivately = { replyPrivately(msg) },
+                            onOpenThread = { msg.threadId?.let { openThread(it) } },
+                            onForward = { forwardMessage(msg) },
+                            onEdit = { messageInputViewModel.edit(msg) },
+                            onCopy = { copyMessage(msg) },
+                            onCopyMessageLink = { copyMessageLink(msg) },
+                            onMarkAsUnread = { markAsUnread(msg) },
+                            onRemind = { remindMeLater(msg) },
+                            onPin = { pinMessage(msg) },
+                            onUnpin = { unPinMessage(msg) },
+                            onTranslate = { translateMessage(msg) },
+                            onShareToNote = { shareToNotes(msg) },
+                            onShare = {
+                                if (msg.getCalculateMessageType() ==
+                                    ChatMessage.MessageType.SINGLE_NC_ATTACHMENT_MESSAGE
+                                ) {
+                                    checkIfSharable(msg)
+                                } else {
+                                    msg.message?.let { shareMessageText(it) }
+                                }
+                            },
+                            onSave = { checkIfSaveable(msg) },
+                            onOpenInFiles = { openInFilesApp(msg) },
+                            onDelete = { deleteMessage(msg) },
+                            onDismiss = { chatViewModel.dismissMessageActions() }
+                        )
                     }
                 }
             }
@@ -1161,9 +1157,14 @@ class ChatActivity :
         fun setupAndPlay(controller: MediaController, message: ChatMessage, file: String) {
             val avatarUrl = chatViewModel.getAvatarUrl(message)
 
+            val artist = if (message.isVoiceMessage) {
+                "Voice Message"
+            } else {
+                message.fileParameters.name
+            }
             val metadata = MediaMetadata.Builder()
                 .setTitle(message.actorDisplayName)
-                .setArtist("Voice Message")
+                .setArtist(artist)
                 .setArtworkUri(avatarUrl.toUri())
                 .build()
 
@@ -1216,7 +1217,18 @@ class ChatActivity :
                 }
             )
 
-            if (controller.currentMediaItem?.mediaId != currentMessageId) {
+            fun finishPreparing() {
+                setupAndPlay(controller, message, filePath)
+                if (message.isVoiceMessage) {
+                    setUpWaveform(message, file)
+                } else {
+                    message.isDownloadingVoiceMessage = false
+                    chatViewModel.syncVoiceMessageUiState(message)
+                }
+            }
+
+            val alreadyLoaded = controller.currentMediaItem?.mediaId == currentMessageId
+            if (!alreadyLoaded || !file.exists()) {
                 if (!file.exists()) {
                     downloadFileToCache(message, true) {
                         chatViewModel.syncVoiceMessageUiState(
@@ -1224,12 +1236,10 @@ class ChatActivity :
                                 voiceMessageDuration = getAudioDuration(file.absolutePath).toInt()
                             }
                         )
-                        setupAndPlay(controller, message, filePath)
-                        setUpWaveform(message, file)
+                        finishPreparing()
                     }
                 } else {
-                    setupAndPlay(controller, message, filePath)
-                    setUpWaveform(message, file)
+                    finishPreparing()
                 }
 
                 return true
@@ -1296,7 +1306,6 @@ class ChatActivity :
     private fun startDirectChat(actorId: String) {
         lifecycleScope.launch {
             try {
-                if (!::conversationUser.isInitialized) return@launch
                 val user = conversationUser
                 val apiVersion = ApiUtils.getConversationApiVersion(user, intArrayOf(ApiUtils.API_V4, 1))
                 val retrofitBucket = ApiUtils.getRetrofitBucketForCreateRoom(
@@ -1310,10 +1319,7 @@ class ChatActivity :
                     retrofitBucket.url,
                     retrofitBucket.queryMap
                 )
-                val bundle = Bundle()
-                bundle.putString(KEY_ROOM_TOKEN, roomOverall.ocs!!.data!!.token)
-                val chatIntent = Intent(this@ChatActivity, ChatActivity::class.java)
-                chatIntent.putExtras(bundle)
+                val chatIntent = createIntent(this@ChatActivity, user.id!!, roomOverall.ocs!!.data!!.token)
                 chatIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 startActivity(chatIntent)
             } catch (e: Exception) {
@@ -1356,7 +1362,13 @@ class ChatActivity :
 
             if (isViewableMedia && seedItems.any { it.messageId == messageId.toLong() }) {
                 startActivity(
-                    MediaViewerActivity.newIntent(this@ChatActivity, roomToken, seedItems, messageId.toLong())
+                    MediaViewerActivity.newIntent(
+                        this@ChatActivity,
+                        conversationUserId,
+                        roomToken,
+                        seedItems,
+                        messageId.toLong()
+                    )
                 )
             } else {
                 fileViewerUtils.openFile(chatMessage, openWhenDownloadState, downloadState)
@@ -1394,6 +1406,14 @@ class ChatActivity :
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        val newUserId = intent.getLongExtra(KEY_INTERNAL_USER_ID, conversationUserId)
+        if (newUserId != conversationUserId) {
+            // A chat instance is bound to one account, so open a fresh instance for the other one.
+            intent.removeFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            finish()
+            startActivity(intent)
+            return
+        }
         val extras: Bundle? = intent.extras
 
         val requestedRoomSwitch = extras?.getBoolean(KEY_SWITCH_TO_ROOM, false) == true
@@ -1485,7 +1505,9 @@ class ChatActivity :
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        chatViewModel.handleOrientationChange()
+        if (isChangingConfigurations) {
+            chatViewModel.handleOrientationChange()
+        }
         super.onSaveInstanceState(outState)
     }
 
@@ -1565,6 +1587,12 @@ class ChatActivity :
         }
 
         lifecycleScope.launch {
+            chatViewModel.actionFailures.collect { message ->
+                Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
+            }
+        }
+
+        lifecycleScope.launch {
             chatViewModel.noMoreSearchResults.collect {
                 val inSearchMode = chatViewModel.chatMode.value == ChatViewModel.ChatMode.SEARCH_MODE
                 val now = System.currentTimeMillis()
@@ -1626,6 +1654,7 @@ class ChatActivity :
                 }
 
                 is ChatViewModel.GetCapabilitiesInitialLoadState -> {
+                    isInitialLoadDone = true
                     spreedCapabilities = state.spreedCapabilities
                     currentConversation = state.conversationModel
                     chatApiVersion = ApiUtils.getChatApiVersion(spreedCapabilities, intArrayOf(1))
@@ -1641,39 +1670,14 @@ class ChatActivity :
                         }
                     }
 
-                    joinRoomWithPassword()
-
-                    if (sharedFilePaths.isNotEmpty()) {
-                        onChooseFileResult(sharedFilePaths.map { it.toUri() })
-                        sharedFilePaths = emptyList()
+                    if (isScreenResumed) {
+                        ensureJoined()
                     }
 
-                    refreshScheduledMessages()
+                    sendSharedFiles()
 
                     updateToolbarState()
-                    if (state.conversationModel.type == ConversationEnums.ConversationType.ROOM_TYPE_ONE_TO_ONE_CALL &&
-                        state.conversationModel.status == "dnd"
-                    ) {
-                        conversationUser.let { user ->
-                            val credentials = ApiUtils.getCredentials(user.username, user.token)
-                            chatViewModel.outOfOfficeStatusOfUser(
-                                credentials!!,
-                                user.baseUrl!!,
-                                state.conversationModel!!.name
-                            )
-                        }
-                    }
-
-                    if (::conversationUser.isInitialized) {
-                        conversationUser.let { user ->
-                            val credentials = ApiUtils.getCredentials(user.username, user.token)
-                            chatViewModel.fetchUpcomingEvent(
-                                credentials!!,
-                                user.baseUrl!!,
-                                roomToken
-                            )
-                        }
-                    }
+                    refreshConversationExtras(state.conversationModel)
 
                     if (state.conversationModel.objectType == ConversationEnums.ObjectType.EVENT &&
                         hasSpreedFeatureCapability(
@@ -1762,6 +1766,8 @@ class ChatActivity :
             }
         }
 
+        chatViewModel.leaveRoomViewState.observeForever(leaveRoomObserver)
+
         messageInputViewModel.sendChatMessageViewState.observe(this) { state ->
             when (state) {
                 is MessageInputViewModel.SendChatMessageSuccessState -> {
@@ -1842,12 +1848,10 @@ class ChatActivity :
         chatViewModel.createRoomViewState.observe(this) { state ->
             when (state) {
                 is ChatViewModel.CreateRoomSuccessState -> {
-                    val bundle = Bundle()
-                    bundle.putString(KEY_ROOM_TOKEN, state.roomOverall.ocs!!.data!!.token)
+                    val token = state.roomOverall.ocs!!.data!!.token
 
                     leaveRoom {
-                        val chatIntent = Intent(context, ChatActivity::class.java)
-                        chatIntent.putExtras(bundle)
+                        val chatIntent = createIntent(context, conversationUserId, token)
                         chatIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                         startActivity(chatIntent)
                     }
@@ -1921,8 +1925,13 @@ class ChatActivity :
             }
         }
 
+        // The observer also gets the current value when the activity is recreated: no feedback for that
+        var lastRecordingInProgress = chatViewModel.getVoiceRecordingInProgress.value
         chatViewModel.getVoiceRecordingInProgress.observe(this) { voiceRecordingInProgress ->
-            VibrationUtils.vibrateShort(context)
+            if (shouldVibrateOnRecordingChange(lastRecordingInProgress, voiceRecordingInProgress)) {
+                VibrationUtils.vibrateShort(context)
+            }
+            lastRecordingInProgress = voiceRecordingInProgress
             if (voiceRecordingInProgress) {
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             } else {
@@ -2120,6 +2129,9 @@ class ChatActivity :
 
         pullChatMessagesPending = false
 
+        // reset in case a previously started leave failed (success already resets this in leaveRoomObserver)
+        isLeavingRoom = false
+
         webSocketInstance?.getSignalingMessageReceiver()?.addListener(localParticipantMessageListener)
         webSocketInstance?.getSignalingMessageReceiver()?.addListener(conversationMessageListener)
 
@@ -2130,6 +2142,58 @@ class ChatActivity :
         binding.let { viewThemeUtils.material.themeFAB(it.voiceRecordingLock) }
 
         updateToolbarState()
+
+        isScreenResumed = true
+        currentConversation?.takeIf { isInitialLoadDone }?.let { conversation ->
+            ensureJoined()
+            if (hasBeenPaused) {
+                returnToChat(conversation)
+            }
+        }
+    }
+
+    /**
+     * Joining the room is the counterpart of leaving it in onPause: once per resume, as soon as the screen is shown
+     * and the capabilities are loaded. It does not depend on when the conversation is refreshed.
+     */
+    private fun ensureJoined() {
+        if (isInitialLoadDone && chatViewModel.claimRoomJoin()) {
+            joinRoomWithPassword()
+        }
+    }
+
+    private fun returnToChat(conversation: ConversationModel) {
+        sendSharedFiles()
+        if (focusInput && messageInputFragment.isAdded) {
+            messageInputFragment.binding.fragmentMessageInputView.requestFocus()
+        }
+        refreshConversationExtras(conversation)
+        updateRoomTimerHandler(MILLIS_250)
+    }
+
+    private fun sendSharedFiles() {
+        if (sharedFilePaths.isNotEmpty()) {
+            onChooseFileResult(sharedFilePaths.map { it.toUri() })
+            sharedFilePaths = emptyList()
+        }
+    }
+
+    private fun refreshConversationExtras(conversation: ConversationModel) {
+        refreshScheduledMessages()
+
+        if (conversation.type == ConversationEnums.ConversationType.ROOM_TYPE_ONE_TO_ONE_CALL &&
+            conversation.status == "dnd"
+        ) {
+            conversationUser.let {
+                val credentials = ApiUtils.getCredentials(it.username, it.token)
+                chatViewModel.outOfOfficeStatusOfUser(credentials!!, it.baseUrl!!, conversation.name)
+            }
+        }
+
+        conversationUser.let {
+            val credentials = ApiUtils.getCredentials(it.username, it.token)
+            chatViewModel.fetchUpcomingEvent(credentials!!, it.baseUrl!!, roomToken)
+        }
     }
 
     private fun setupChatToolbarView() {
@@ -2178,7 +2242,7 @@ class ChatActivity :
 
     fun updateToolbarState() {
         val conversation = currentConversation
-        val user = if (::conversationUser.isInitialized) conversationUser else null
+        val user = conversationUser
         val isOneToOne = isOneToOneConversation()
         val capabilitiesReady = ::spreedCapabilities.isInitialized
 
@@ -2190,11 +2254,11 @@ class ChatActivity :
             subtitle = buildToolbarSubtitle(conversation),
             avatarType = buildAvatarType(conversation),
             avatarUrl = buildAvatarUrl(user, conversation),
-            credentials = user?.let { ApiUtils.getCredentials(it.username, it.token) },
+            credentials = ApiUtils.getCredentials(user.username, user.token),
             userStatus = if (isOneToOne) conversation?.status else null,
             showVoiceCall = isCallsEnabled(capabilitiesReady, conversation),
             showVideoCall = isCallsEnabled(capabilitiesReady, conversation),
-            titleClickable = user?.userId != "?" && !chatToolbarState.isSearchMode,
+            titleClickable = user.userId != "?" && !chatToolbarState.isSearchMode,
             overflowItems = buildOverflowItems(),
             threadNotificationIcon = buildThreadNotificationIcon(capabilitiesReady),
             showEventMenu = conversation?.objectType == ConversationEnums.ObjectType.EVENT,
@@ -2365,35 +2429,31 @@ class ChatActivity :
     }
 
     private fun switchToRoom(token: String, startCallAfterRoomSwitch: Boolean, isVoiceOnlyCall: Boolean) {
-        if (::conversationUser.isInitialized) {
-            runOnUiThread {
-                val toastInfo = if (currentConversation?.objectType == ConversationEnums.ObjectType.ROOM) {
-                    context.resources.getString(R.string.switch_to_main_room)
-                } else {
-                    context.resources.getString(R.string.switch_to_breakout_room)
-                }
-                // do not replace with snackbar, as it would disappear with the activity switch
-                Toast.makeText(
-                    context,
-                    toastInfo,
-                    Toast.LENGTH_LONG
-                ).show()
+        runOnUiThread {
+            val toastInfo = if (currentConversation?.objectType == ConversationEnums.ObjectType.ROOM) {
+                context.resources.getString(R.string.switch_to_main_room)
+            } else {
+                context.resources.getString(R.string.switch_to_breakout_room)
             }
+            // do not replace with snackbar, as it would disappear with the activity switch
+            Toast.makeText(
+                context,
+                toastInfo,
+                Toast.LENGTH_LONG
+            ).show()
+        }
 
-            val bundle = Bundle()
-            bundle.putString(KEY_ROOM_TOKEN, token)
+        val bundle = Bundle()
 
-            if (startCallAfterRoomSwitch) {
-                bundle.putBoolean(KEY_START_CALL_AFTER_ROOM_SWITCH, true)
-                bundle.putBoolean(KEY_CALL_VOICE_ONLY, isVoiceOnlyCall)
-            }
+        if (startCallAfterRoomSwitch) {
+            bundle.putBoolean(KEY_START_CALL_AFTER_ROOM_SWITCH, true)
+            bundle.putBoolean(KEY_CALL_VOICE_ONLY, isVoiceOnlyCall)
+        }
 
-            leaveRoom {
-                val chatIntent = Intent(context, ChatActivity::class.java)
-                chatIntent.putExtras(bundle)
-                chatIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                startActivity(chatIntent)
-            }
+        leaveRoom {
+            val chatIntent = createIntent(context, conversationUserId, token, bundle)
+            chatIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            startActivity(chatIntent)
         }
     }
 
@@ -2424,8 +2484,6 @@ class ChatActivity :
         chatViewModel.syncVoiceMessageUiState(message)
         message.openWhenDownloaded = openWhenDownloaded
 
-        val baseUrl = conversationUser.baseUrl
-        val userId = conversationUser.userId
         val attachmentFolder = CapabilitiesUtil.getAttachmentFolder(
             conversationUser.capabilities!!
                 .spreedCapability!!
@@ -2454,8 +2512,7 @@ class ChatActivity :
         }
 
         val data: Data = Data.Builder()
-            .putString(DownloadFileToCacheWorker.KEY_BASE_URL, baseUrl)
-            .putString(DownloadFileToCacheWorker.KEY_USER_ID, userId)
+            .putLong(KEY_INTERNAL_USER_ID, conversationUserId)
             .putString(DownloadFileToCacheWorker.KEY_ATTACHMENT_FOLDER, attachmentFolder)
             .putString(DownloadFileToCacheWorker.KEY_FILE_NAME, fileName)
             .putString(DownloadFileToCacheWorker.KEY_FILE_PATH, path)
@@ -2916,73 +2973,20 @@ class ChatActivity :
 
     fun showBrowserScreen() {
         val sharingFileBrowserIntent = Intent(this, RemoteFileBrowserActivity::class.java)
+        sharingFileBrowserIntent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
         startRemoteFileBrowsingForResult.launch(sharingFileBrowserIntent)
     }
 
     fun showShareLocationScreen() {
         Log.d(TAG, "showShareLocationScreen")
 
-        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
-        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-
-        if (!isGpsEnabled) {
-            showLocationServicesDisabledDialog()
-        } else if (!permissionUtil.isLocationPermissionGranted()) {
-            showLocationPermissionDeniedDialog()
-        }
-
-        if (permissionUtil.isLocationPermissionGranted() && isGpsEnabled) {
-            val intent = Intent(this, LocationPickerActivity::class.java)
-            intent.putExtra(KEY_ROOM_TOKEN, roomToken)
-            intent.putExtra(BundleKeys.KEY_CHAT_API_VERSION, chatApiVersion)
-            startActivity(intent)
-        }
-    }
-
-    private fun showLocationServicesDisabledDialog() {
-        val title = resources.getString(R.string.location_services_disabled)
-        val explanation = resources.getString(R.string.location_services_disabled_msg)
-        val positive = resources.getString(R.string.nc_permissions_settings)
-        val cancel = resources.getString(R.string.nc_cancel)
-        val dialogBuilder = MaterialAlertDialogBuilder(this)
-            .setTitle(title)
-            .setMessage(explanation)
-            .setPositiveButton(positive) { _, _ ->
-                val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-                startActivity(intent)
-            }
-            .setNegativeButton(cancel, null)
-
-        viewThemeUtils.dialog.colorMaterialAlertDialogBackground(this, dialogBuilder)
-        val dialog = dialogBuilder.show()
-        viewThemeUtils.platform.colorTextButtons(
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE),
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-        )
-    }
-
-    private fun showLocationPermissionDeniedDialog() {
-        val title = resources.getString(R.string.location_permission_denied)
-        val explanation = resources.getString(R.string.location_permission_denied_msg)
-        val positive = resources.getString(R.string.nc_permissions_settings)
-        val cancel = resources.getString(R.string.nc_cancel)
-        val dialogBuilder = MaterialAlertDialogBuilder(this)
-            .setTitle(title)
-            .setMessage(explanation)
-            .setPositiveButton(positive) { _, _ ->
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.fromParts("package", packageName, null)
-                }
-                startActivity(intent)
-            }
-            .setNegativeButton(cancel, null)
-
-        viewThemeUtils.dialog.colorMaterialAlertDialogBackground(this, dialogBuilder)
-        val dialog = dialogBuilder.show()
-        viewThemeUtils.platform.colorTextButtons(
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE),
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-        )
+        // location permission and location services are optional: without them, a place can still be picked on the
+        // map. The picker asks for the permission itself.
+        val intent = Intent(this, LocationPickerActivity::class.java)
+        intent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
+        intent.putExtra(KEY_ROOM_TOKEN, roomToken)
+        intent.putExtra(BundleKeys.KEY_CHAT_API_VERSION, chatApiVersion)
+        startActivity(intent)
     }
 
     private fun showConversationInfoScreen() {
@@ -2999,6 +3003,7 @@ class ChatActivity :
 
         val intent = Intent(this, ConversationInfoActivity::class.java)
         intent.putExtras(bundle)
+        intent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
         startActivity(intent)
     }
 
@@ -3009,17 +3014,15 @@ class ChatActivity :
 
     @Suppress("Detekt.TooGenericExceptionCaught")
     private fun cancelNotificationsForCurrentConversation() {
-        if (::conversationUser.isInitialized) {
-            if (!TextUtils.isEmpty(roomToken)) {
-                try {
-                    NotificationUtils.cancelExistingNotificationsForRoom(
-                        applicationContext,
-                        conversationUser!!,
-                        roomToken
-                    )
-                } catch (e: RuntimeException) {
-                    Log.w(TAG, "Cancel notifications for current conversation results with an error.", e)
-                }
+        if (!TextUtils.isEmpty(roomToken)) {
+            try {
+                NotificationUtils.cancelExistingNotificationsForRoom(
+                    applicationContext,
+                    conversationUser!!,
+                    roomToken
+                )
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "Cancel notifications for current conversation results with an error.", e)
             }
         }
     }
@@ -3028,6 +3031,9 @@ class ChatActivity :
         super.onPause()
 
         logConversationInfos("onPause")
+
+        isScreenResumed = false
+        hasBeenPaused = true
 
         eventBus.unregister(this)
 
@@ -3040,12 +3046,14 @@ class ChatActivity :
             getRoomInfoTimerHandler?.removeCallbacksAndMessages(null)
         }
 
-        if (::conversationUser.isInitialized && isActivityNotChangingConfigurations() && isNotInCall()) {
-            ApplicationWideCurrentRoomHolder.getInstance().clear()
-            if (validSessionId()) {
+        if (isActivityNotChangingConfigurations() && isNotInCall()) {
+            if (isLeavingRoom) {
+                Log.d(TAG, "not leaving room (leave already in progress)")
+            } else if (validSessionId()) {
                 leaveRoom(null)
             } else {
                 Log.d(TAG, "not leaving room (validSessionId is false)")
+                ApplicationWideCurrentRoomHolder.getInstance().clear()
             }
         } else {
             Log.d(TAG, "not leaving room...")
@@ -3087,6 +3095,10 @@ class ChatActivity :
         super.onDestroy()
         logConversationInfos("onDestroy")
 
+        if (::initialUser.isInitialized) {
+            chatViewModel.leaveRoomViewState.removeObserver(leaveRoomObserver)
+        }
+
         findViewById<View>(R.id.toolbar)?.setOnClickListener(null)
 
         if (actionBar != null) {
@@ -3098,8 +3110,10 @@ class ChatActivity :
 
     private fun joinRoomWithPassword() {
         // if ApplicationWideCurrentRoomHolder contains a session (because a call is active), then keep the sessionId
-        if (ApplicationWideCurrentRoomHolder.getInstance().currentRoomToken ==
-            currentConversation!!.token
+        if (ApplicationWideCurrentRoomHolder.getInstance().isCurrentRoom(
+                currentConversation!!.token,
+                conversationUser.id
+            )
         ) {
             sessionIdAfterRoomJoined = ApplicationWideCurrentRoomHolder.getInstance().session
 
@@ -3122,6 +3136,7 @@ class ChatActivity :
 
     fun leaveRoom(functionToCallAfterLeave: (() -> Unit)?) {
         logConversationInfos("leaveRoom")
+        isLeavingRoom = true
 
         // Send the HPB "leave room" immediately, before waiting for the backend DELETE to
         // confirm. This minimises the window in which the HPB could still consider the user
@@ -3130,12 +3145,11 @@ class ChatActivity :
             webSocketInstance?.joinRoomWithRoomTokenAndSession("", sessionIdAfterRoomJoined)
         }
         sessionIdAfterRoomJoined = "0"
+        // the session is left now, so a chat opened before the leave is answered must not reuse it
+        ApplicationWideCurrentRoomHolder.getInstance().clear()
 
-        var apiVersion = 1
         // FIXME Fix API checking with guests?
-        if (::conversationUser.isInitialized) {
-            apiVersion = ApiUtils.getConversationApiVersion(conversationUser, intArrayOf(ApiUtils.API_V4, 1))
-        }
+        val apiVersion = ApiUtils.getConversationApiVersion(conversationUser, intArrayOf(ApiUtils.API_V4, 1))
 
         val startNanoTime = System.nanoTime()
         Log.d(TAG, "leaveRoom - leaveRoom - calling: $startNanoTime")
@@ -3151,8 +3165,8 @@ class ChatActivity :
     }
 
     private fun setupWebsocket() {
-        if (currentConversation == null || !::conversationUser.isInitialized) {
-            Log.e(TAG, "setupWebsocket: currentConversation or conversationUser is null")
+        if (currentConversation == null) {
+            Log.e(TAG, "setupWebsocket: currentConversation is null")
             return
         }
 
@@ -3245,6 +3259,7 @@ class ChatActivity :
     private fun openScheduledMessages() {
         val intent = Intent(this, ScheduledMessagesActivity::class.java).apply {
             putExtra(ScheduledMessagesActivity.ROOM_TOKEN, roomToken)
+            putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
             putExtra(ScheduledMessagesActivity.CONVERSATION_NAME, currentConversation?.displayName.orEmpty())
             if (conversationThreadId != null && conversationThreadId!! > 0) {
                 putExtra(ScheduledMessagesActivity.THREAD_ID, conversationThreadId)
@@ -3367,8 +3382,8 @@ class ChatActivity :
         val unarchiveConversation = popupView.findViewById<TextView>(R.id.unarchive_conversation)
         if (meetingStatus == context.resources.getString(R.string.nc_meeting_ended) &&
             (
-                Participant.ParticipantType.MODERATOR == currentConversation?.participantType ||
-                    Participant.ParticipantType.OWNER == currentConversation?.participantType
+                ParticipantDto.ParticipantType.MODERATOR == currentConversation?.participantType ||
+                    ParticipantDto.ParticipantType.OWNER == currentConversation?.participantType
                 )
         ) {
             if (currentConversation?.hasArchived == false) {
@@ -3485,6 +3500,7 @@ class ChatActivity :
 
     private fun showSharedItems() {
         val intent = Intent(this, SharedItemsActivity::class.java)
+        intent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
         intent.putExtra(KEY_CONVERSATION_NAME, currentConversation?.displayName)
         intent.putExtra(KEY_ROOM_TOKEN, roomToken)
         intent.putExtra(
@@ -3519,20 +3535,18 @@ class ChatActivity :
 
     private fun startACall(isVoiceOnlyCall: Boolean, callWithoutNotification: Boolean) {
         currentConversation?.let {
-            if (::conversationUser.isInitialized) {
-                if (CapabilitiesUtil.isCallEndToEndEncryptionEnabled(spreedCapabilities)) {
-                    Snackbar.make(binding.root, R.string.nc_call_e2ee_not_supported, Snackbar.LENGTH_LONG).show()
-                    return
-                }
-                val pp = ParticipantPermissions(spreedCapabilities, it)
-                if (!pp.canStartCall() && currentConversation?.hasCall == false) {
-                    Snackbar.make(binding.root, R.string.startCallForbidden, Snackbar.LENGTH_LONG).show()
-                } else {
-                    ApplicationWideCurrentRoomHolder.getInstance().isDialing = true
-                    val callIntent = getIntentForCall(isVoiceOnlyCall, callWithoutNotification)
-                    if (callIntent != null) {
-                        startActivity(callIntent)
-                    }
+            if (CapabilitiesUtil.isCallEndToEndEncryptionEnabled(spreedCapabilities)) {
+                Snackbar.make(binding.root, R.string.nc_call_e2ee_not_supported, Snackbar.LENGTH_LONG).show()
+                return
+            }
+            val pp = ParticipantPermissions(spreedCapabilities, it)
+            if (!pp.canStartCall() && currentConversation?.hasCall == false) {
+                Snackbar.make(binding.root, R.string.startCallForbidden, Snackbar.LENGTH_LONG).show()
+            } else {
+                ApplicationWideCurrentRoomHolder.getInstance().isDialing = true
+                val callIntent = getIntentForCall(isVoiceOnlyCall, callWithoutNotification)
+                if (callIntent != null) {
+                    startActivity(callIntent)
                 }
             }
         }
@@ -3570,6 +3584,7 @@ class ChatActivity :
 
             val callIntent = Intent(this, CallActivity::class.java)
             callIntent.putExtras(bundle)
+            callIntent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
             return callIntent
         } ?: run {
             return null
@@ -3648,22 +3663,19 @@ class ChatActivity :
             )
             Snackbar.make(binding.root, R.string.nc_common_error_sorry, Snackbar.LENGTH_LONG).show()
         } else {
-            var apiVersion = 1
             // FIXME Fix API checking with guests?
-            if (::conversationUser.isInitialized) {
-                apiVersion = ApiUtils.getChatApiVersion(spreedCapabilities, intArrayOf(1))
-            }
+            val apiVersion = ApiUtils.getChatApiVersion(spreedCapabilities, intArrayOf(1))
 
-            chatViewModel.deleteChatMessages(
-                credentials!!,
+            val urlsByMessageId = chatViewModel.messageIdsToDelete(message.jsonMessageId).associateWith { id ->
                 ApiUtils.getUrlForChatMessage(
                     apiVersion,
                     conversationUser.baseUrl!!,
                     roomToken,
-                    message.jsonMessageId.toString()
-                ),
-                message.jsonMessageId
-            )
+                    id.toString()
+                )
+            }
+
+            chatViewModel.deleteChatMessages(credentials!!, urlsByMessageId)
         }
     }
 
@@ -3691,6 +3703,7 @@ class ChatActivity :
 
         val intent = Intent(this, ConversationsListActivity::class.java)
         intent.putExtras(bundle)
+        intent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         startActivity(intent)
         finish()
@@ -3711,7 +3724,8 @@ class ChatActivity :
             setContent {
                 DateTimeCompose(
                     bundle,
-                    chatViewModel
+                    chatViewModel,
+                    conversationUser
                 ).GetDateTimeDialog(shouldDismiss, this@ChatActivity)
             }
         }
@@ -3816,6 +3830,7 @@ class ChatActivity :
         bundle.putString(BundleKeys.KEY_TRANSLATE_MESSAGE, message?.getRichText())
 
         val intent = Intent(this, TranslateActivity::class.java)
+        intent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
         intent.putExtras(bundle)
         startActivity(intent)
     }
@@ -4005,6 +4020,7 @@ class ChatActivity :
                 chatViewModel.shareLocationToNotes(
                     credentials!!,
                     ApiUtils.getUrlToSendLocation(apiVersion, conversationUser!!.baseUrl!!, roomToken),
+                    ApiUtils.getUrlForChat(apiVersion, conversationUser!!.baseUrl!!, roomToken),
                     "geo-location",
                     objectId,
                     metaData
@@ -4036,10 +4052,7 @@ class ChatActivity :
     }
 
     fun openNoteToSelfConversation(noteToSelfRoomToken: String) {
-        val bundle = Bundle()
-        bundle.putString(KEY_ROOM_TOKEN, noteToSelfRoomToken)
-        val chatIntent = Intent(context, ChatActivity::class.java)
-        chatIntent.putExtras(bundle)
+        val chatIntent = createIntent(context, conversationUserId, noteToSelfRoomToken)
         chatIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         startActivity(chatIntent)
     }
@@ -4098,8 +4111,6 @@ class ChatActivity :
     }
 
     fun userAllowedByPrivilages(message: ChatMessage): Boolean {
-        if (!::conversationUser.isInitialized) return false
-
         val isUserAllowedByPrivileges = if (message.actorId == conversationUser!!.userId) {
             true
         } else {
@@ -4196,9 +4207,7 @@ class ChatActivity :
     }
 
     fun createPoll() {
-        val pollVoteDialog = PollCreateDialogFragment.newInstance(
-            roomToken
-        )
+        val pollVoteDialog = PollCreateDialogFragment.newInstance(conversationUser, roomToken)
         pollVoteDialog.show(supportFragmentManager, TAG)
     }
 
@@ -4210,10 +4219,8 @@ class ChatActivity :
 
     fun openThread(messageId: Long) {
         val bundle = Bundle()
-        bundle.putString(KEY_ROOM_TOKEN, roomToken)
         bundle.putLong(KEY_THREAD_ID, messageId)
-        val chatIntent = Intent(context, ChatActivity::class.java)
-        chatIntent.putExtras(bundle)
+        val chatIntent = createIntent(context, conversationUserId, roomToken, bundle)
         startActivity(chatIntent)
     }
 
@@ -4231,6 +4238,7 @@ class ChatActivity :
 
         val threadsOverviewIntent = Intent(context, ThreadsOverviewActivity::class.java)
         threadsOverviewIntent.putExtras(bundle)
+        threadsOverviewIntent.putExtra(KEY_INTERNAL_USER_ID, conversationUserId)
         startActivity(threadsOverviewIntent)
     }
 
@@ -4317,6 +4325,16 @@ class ChatActivity :
 
     companion object {
         val TAG = ChatActivity::class.java.simpleName
+
+        /**
+         * Creates an intent that opens the conversation [roomToken] of the account with the internal id [userId].
+         */
+        fun createIntent(context: Context, userId: Long, roomToken: String, extras: Bundle? = null): Intent =
+            Intent(context, ChatActivity::class.java).apply {
+                extras?.let { putExtras(it) }
+                putExtra(KEY_ROOM_TOKEN, roomToken)
+                putExtra(KEY_INTERNAL_USER_ID, userId)
+            }
         private const val CONTENT_TYPE_CALL_STARTED: Byte = 1
         private const val CONTENT_TYPE_SYSTEM_MESSAGE: Byte = 2
         private const val CONTENT_TYPE_UNREAD_NOTICE_MESSAGE: Byte = 3
@@ -4387,3 +4405,9 @@ internal fun resolveReplyToMessageId(replyMessageId: Int?, draftQuotedJsonId: In
     val replyId = replyMessageId?.takeIf { it != 0 } ?: draftQuotedJsonId?.takeIf { it != 0 }
     return replyId ?: threadId ?: 0
 }
+
+/**
+ * Feedback is for the user starting or ending a recording, not for an activity which only shows the state again.
+ */
+internal fun shouldVibrateOnRecordingChange(previous: Boolean?, current: Boolean): Boolean =
+    current != (previous ?: false)

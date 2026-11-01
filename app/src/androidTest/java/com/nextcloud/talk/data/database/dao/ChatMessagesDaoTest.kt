@@ -19,7 +19,7 @@ import com.nextcloud.talk.data.source.local.TalkDatabase
 import com.nextcloud.talk.data.user.UsersDao
 import com.nextcloud.talk.data.user.model.UserEntity
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
-import com.nextcloud.talk.models.json.participants.Participant
+import com.nextcloud.talk.models.json.participants.ParticipantDto
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -60,8 +60,8 @@ class ChatMessagesDaoTest {
             usersDao.saveUser(createUserEntity("account1", "Account 1"))
             usersDao.saveUser(createUserEntity("account2", "Account 2"))
 
-            val account1 = usersDao.getUserWithUserId("account1").blockingGet()
-            val account2 = usersDao.getUserWithUserId("account2").blockingGet()
+            val account1 = usersDao.getUserWithUserId("account1")!!
+            val account2 = usersDao.getUserWithUserId("account2")!!
 
             // Problem: lets say we want to update the conv list -> We don#t know the primary keys!
             // with account@token that would be easier!
@@ -230,7 +230,7 @@ class ChatMessagesDaoTest {
             notificationLevel = ConversationEnums.NotificationLevel.ALWAYS,
             conversationReadOnlyState = ConversationEnums.ConversationReadOnlyState.CONVERSATION_READ_ONLY,
             hasCustomAvatar = false,
-            participantType = Participant.ParticipantType.DUMMY,
+            participantType = ParticipantDto.ParticipantType.DUMMY,
             recordingConsentRequired = 1
         )
     }

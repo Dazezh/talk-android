@@ -64,10 +64,10 @@ import com.nextcloud.talk.models.domain.ConversationModel
 import com.nextcloud.talk.models.json.chat.ChatUtils.Companion.getParsedMessage
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
 import com.nextcloud.talk.models.json.notifications.NotificationOverall
-import com.nextcloud.talk.models.json.participants.Participant
+import com.nextcloud.talk.models.json.participants.ParticipantDto
 import com.nextcloud.talk.models.json.participants.ParticipantsOverall
-import com.nextcloud.talk.models.json.push.DecryptedPushMessage
-import com.nextcloud.talk.models.json.push.NotificationUser
+import com.nextcloud.talk.models.json.push.DecryptedPushMessageDto
+import com.nextcloud.talk.models.json.push.NotificationUserDto
 import com.nextcloud.talk.receivers.DeclineCallReceiver
 import com.nextcloud.talk.receivers.DirectReplyReceiver
 import com.nextcloud.talk.receivers.DismissRecordingAvailableReceiver
@@ -151,7 +151,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
     var okHttpClient: OkHttpClient? = null
     private lateinit var credentials: String
     private lateinit var ncApi: NcApi
-    private lateinit var pushMessage: DecryptedPushMessage
+    private lateinit var pushMessage: DecryptedPushMessageDto
     private lateinit var user: User
     private var context: Context? = null
     private var conversationType: String? = "one2one"
@@ -251,7 +251,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
 
     @Suppress("LongMethod", "TooGenericExceptionCaught")
     private fun handleCallPushMessage() {
-        val userBeingCalled = userManager.getUserWithId(user.id!!).blockingGet()
+        val userBeingCalled = runBlocking { userManager.getUserWithId(user.id!!) }
 
         fun createBundle(conversation: ConversationModel): Bundle {
             val bundle = Bundle()
@@ -313,23 +313,16 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
 
-            val answerVoiceBundle = Bundle(bundle).apply { putBoolean(BundleKeys.KEY_CALL_VOICE_ONLY, true) }
-            val answerVoicePendingIntent = PendingIntent.getActivity(
-                applicationContext,
-                requestCode + ANSWER_VOICE_REQUEST_OFFSET,
-                Intent(applicationContext, CallActivity::class.java).apply {
-                    putExtras(answerVoiceBundle)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                },
-                pendingIntentFlags
-            )
+            val isVideoCall = (conversation.callFlag and ParticipantDto.InCallFlags.WITH_VIDEO) > 0
 
-            val answerVideoBundle = Bundle(bundle).apply { putBoolean(BundleKeys.KEY_CALL_VOICE_ONLY, false) }
-            val answerVideoPendingIntent = PendingIntent.getActivity(
+            val answerBundle = Bundle(bundle).apply { putBoolean(BundleKeys.KEY_CALL_VOICE_ONLY, !isVideoCall) }
+            val answerPendingIntentOffset =
+                if (isVideoCall) ANSWER_VIDEO_REQUEST_OFFSET else ANSWER_VOICE_REQUEST_OFFSET
+            val primaryAnswerIntent = PendingIntent.getActivity(
                 applicationContext,
-                requestCode + ANSWER_VIDEO_REQUEST_OFFSET,
+                requestCode + answerPendingIntentOffset,
                 Intent(applicationContext, CallActivity::class.java).apply {
-                    putExtras(answerVideoBundle)
+                    putExtras(answerBundle)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 },
                 pendingIntentFlags
@@ -345,7 +338,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
             )
 
             val soundUri = getCallRingtoneUri(applicationContext, appPreferences)
-            val notificationChannelId = NotificationUtils.NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V4.name
+            val notificationChannelId = NotificationUtils.NotificationChannels.NOTIFICATION_CHANNEL_CALLS_V5.name
             val uri = user.baseUrl!!.toUri()
             val baseUrl = uri.host
 
@@ -362,9 +355,6 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
                 loadAvatarSync(avatarUrl, applicationContext)?.let { callerPersonBuilder.setIcon(it) }
             }
             val callerPerson = callerPersonBuilder.build()
-
-            val isVideoCall = (conversation.callFlag and Participant.InCallFlags.WITH_VIDEO) > 0
-            val primaryAnswerIntent = if (isVideoCall) answerVideoPendingIntent else answerVoicePendingIntent
 
             val notification =
                 NotificationCompat.Builder(applicationContext, notificationChannelId)
@@ -396,14 +386,14 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
         }
 
         val conversation = try {
-            runBlocking { chatNetworkDataSource?.getRoom(userBeingCalled, roomToken = pushMessage.id!!) }
+            runBlocking { chatNetworkDataSource?.getRoom(userBeingCalled!!, roomToken = pushMessage.id!!) }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get room", e)
             null
         }
 
-        if (conversation != null && userManager.setUserAsActive(userBeingCalled!!).blockingGet()) {
-            if (CapabilitiesUtil.isCallEndToEndEncryptionEnabled(userBeingCalled?.capabilities?.spreedCapability)) {
+        if (conversation != null && userBeingCalled != null) {
+            if (CapabilitiesUtil.isCallEndToEndEncryptionEnabled(userBeingCalled.capabilities?.spreedCapability)) {
                 showEndToEndEncryptionUnsupportedNotification(conversation)
             } else {
                 prepareCallNotificationScreen(conversation)
@@ -440,8 +430,8 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
     private fun initFromCleartextSubject(inputData: Data): Boolean {
         val subject = inputData.getString(BundleKeys.KEY_NOTIFICATION_CLEARTEXT_SUBJECT)
         val id = inputData.getLong(BundleKeys.KEY_NOTIFICATION_USER_ID, -1)
-        user = userManager.getUserWithId(id).blockingGet()
-        pushMessage = LoganSquare.parse(subject, DecryptedPushMessage::class.java)
+        user = runBlocking { userManager.getUserWithId(id) }!!
+        pushMessage = LoganSquare.parse(subject, DecryptedPushMessageDto::class.java)
         return true
     }
 
@@ -463,7 +453,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
 
                 pushMessage = LoganSquare.parse(
                     String(decryptedSubject),
-                    DecryptedPushMessage::class.java
+                    DecryptedPushMessageDto::class.java
                 )
                 user = signatureVerification.user!!
                 true
@@ -557,7 +547,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
     }
 
     private fun enrichPushMessageByNcNotificationData(
-        ncNotification: com.nextcloud.talk.models.json.notifications.Notification
+        ncNotification: com.nextcloud.talk.models.json.notifications.NotificationDto
     ) {
         pushMessage.objectId = ncNotification.objectId
         pushMessage.timestamp = ncNotification.datetime!!.millis
@@ -595,7 +585,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
                     conversationType = callHashMap["call-type"]
                 }
             }
-            val notificationUser = NotificationUser()
+            val notificationUser = NotificationUserDto()
             if (userHashMap != null && userHashMap.isNotEmpty()) {
                 notificationUser.id = userHashMap["id"]
                 notificationUser.type = userHashMap["type"]
@@ -615,7 +605,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
     }
 
     private fun checkAndExtractImagePreviewData(
-        notification: com.nextcloud.talk.models.json.notifications.Notification
+        notification: com.nextcloud.talk.models.json.notifications.NotificationDto
     ) {
         imagePreviewUrl = null
         imageMimeType = null
@@ -645,7 +635,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
     @Suppress("MagicNumber", "LongMethod")
     private fun showNotification(
         intent: Intent,
-        ncNotification: com.nextcloud.talk.models.json.notifications.Notification?
+        ncNotification: com.nextcloud.talk.models.json.notifications.NotificationDto?
     ) {
         var category = ""
         when (pushMessage.type) {
@@ -911,7 +901,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
         notificationBuilder.setStyle(newStyle)
     }
 
-    private fun loadSenderAvatar(notificationUser: NotificationUser?): Bitmap? {
+    private fun loadSenderAvatar(notificationUser: NotificationUserDto?): Bitmap? {
         val userType = notificationUser?.type ?: return null
 
         return if ("user" == userType) {
@@ -935,7 +925,13 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
     }
 
     private fun loadConversationAvatar(roomToken: String): Bitmap? =
-        NotificationUtils.loadConversationAvatarBitmapSync(user.baseUrl, roomToken, credentials, context!!)
+        NotificationUtils.loadConversationAvatarBitmapSync(
+            user.baseUrl,
+            roomToken,
+            credentials,
+            context!!,
+            isOneToOne = false
+        )
 
     private fun loadImageBitmapSync(imageUrl: String): Bitmap? {
         var bitmap: Bitmap? = null
@@ -1058,7 +1054,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
     private fun addDismissRecordingAvailableAction(
         notificationBuilder: NotificationCompat.Builder,
         systemNotificationId: Int,
-        ncNotification: com.nextcloud.talk.models.json.notifications.Notification
+        ncNotification: com.nextcloud.talk.models.json.notifications.NotificationDto
     ) {
         var dismissLabel = ""
         var dismissRecordingUrl = ""
@@ -1072,6 +1068,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
 
         val dismissIntent = Intent(context, DismissRecordingAvailableReceiver::class.java)
         dismissIntent.putExtra(KEY_SYSTEM_NOTIFICATION_ID, systemNotificationId)
+        dismissIntent.putExtra(KEY_INTERNAL_USER_ID, user.id)
         dismissIntent.putExtra(KEY_DISMISS_RECORDING_URL, dismissRecordingUrl)
 
         val intentFlag: Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -1091,7 +1088,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
     private fun addShareRecordingToChatAction(
         notificationBuilder: NotificationCompat.Builder,
         systemNotificationId: Int,
-        ncNotification: com.nextcloud.talk.models.json.notifications.Notification
+        ncNotification: com.nextcloud.talk.models.json.notifications.NotificationDto
     ) {
         var shareToChatLabel = ""
         var shareToChatUrl = ""
@@ -1105,6 +1102,7 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
 
         val shareRecordingIntent = Intent(context, ShareRecordingToChatReceiver::class.java)
         shareRecordingIntent.putExtra(KEY_SYSTEM_NOTIFICATION_ID, systemNotificationId)
+        shareRecordingIntent.putExtra(KEY_INTERNAL_USER_ID, user.id)
         shareRecordingIntent.putExtra(KEY_SHARE_RECORDING_TO_CHAT_URL, shareToChatUrl)
         shareRecordingIntent.putExtra(KEY_ROOM_TOKEN, pushMessage.id)
 
@@ -1197,12 +1195,12 @@ class NotificationWorker(context: Context, workerParams: WorkerParameters) : Wor
                 override fun onSubscribe(d: Disposable) = Unit
 
                 override fun onNext(participantsOverall: ParticipantsOverall) {
-                    val participantList: List<Participant> = participantsOverall.ocs!!.data!!
+                    val participantList: List<ParticipantDto> = participantsOverall.ocs!!.data!!
                     hasParticipantsInCall = participantList.isNotEmpty()
                     if (hasParticipantsInCall) {
                         for (participant in participantList) {
                             if (participant.actorId == user.userId &&
-                                participant.actorType == Participant.ActorType.USERS
+                                participant.actorType == ParticipantDto.ActorType.USERS
                             ) {
                                 inCallOnDifferentDevice = true
                                 break

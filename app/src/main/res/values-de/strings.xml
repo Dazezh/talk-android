@@ -150,6 +150,7 @@
     <string name="nc_call_button_content_description_hangup">Auflegen</string>
     <string name="nc_call_button_content_description_microphone">Mikrofon umschalten</string>
     <string name="nc_call_button_content_description_pip">Bild-in-Bild-Modus öffnen</string>
+    <string name="nc_call_button_content_description_switch_camera">Kamera wechseln</string>
     <string name="nc_call_button_content_description_switch_to_self_vide">Wechseln Sie zum Eigenen Video</string>
     <string name="nc_call_e2ee_not_supported">Anrufe werden aktuell nicht unterstützt, da die Ende-zu-Ende-Verschlüsselung auf dem Server aktiviert ist</string>
     <string name="nc_call_e2ee_not_supported_title">Anruf von %s nicht verfügbar</string>
@@ -164,6 +165,8 @@
     <string name="nc_call_raised_hand">%1$s hat die Hand gehoben</string>
     <string name="nc_call_reconnecting">Verbinde erneut …</string>
     <string name="nc_call_ringing">KLINGELT</string>
+    <string name="nc_call_self_video_enlarge">Eigenes Video vergrößern</string>
+    <string name="nc_call_self_video_shrink">Eigenes Video verkleinern</string>
     <string name="nc_call_state_in_call">%1$s ist in einem Gespräch</string>
     <string name="nc_call_state_with_phone">%1$s mit Telefon</string>
     <string name="nc_call_state_with_video">%1$s mit Video</string>
@@ -365,6 +368,7 @@
     <string name="nc_location_unknown">Position unbekannt</string>
     <string name="nc_locked">Gesperrt</string>
     <string name="nc_locked_tap_to_unlock">Zum Entsperren antippen</string>
+    <string name="nc_login_too_many_attempts">Zu viele fehlgeschlagene Anmeldeversuche aus diesem Netzwerk. Bitte später noch einmal versuchen.</string>
     <string name="nc_logs_advanced_logging">Erweiterte Protokollierung</string>
     <string name="nc_logs_advanced_logging_disable">Erweiterte Protokollierung deaktivieren</string>
     <string name="nc_logs_advanced_logging_enable">Erweiterte Protokollierung aktivieren</string>
@@ -397,6 +401,7 @@
     <string name="nc_message_added_to_notes">Nachricht zu den Notizen hinzugefügt</string>
     <string name="nc_message_failed">Nachricht konnte nicht gesendet werden</string>
     <string name="nc_message_failed_to_send">Fehler beim Senden der Nachricht:</string>
+    <string name="nc_message_not_added_to_notes">Die Nachricht konnte nicht zu den Notizen hinzugefügt werden</string>
     <string name="nc_message_quote_cancel_reply">Antwort abbrechen</string>
     <string name="nc_message_read">Nachricht gelesen</string>
     <string name="nc_message_scheduled">Nachricht geplant</string>
@@ -475,6 +480,7 @@
     <string name="nc_push_notification_error">Leider ist etwas schief gelaufen, der Fehler ist %1$s</string>
     <string name="nc_push_notification_fetch_error">Leider ist etwas schief gelaufen, die Test-Push-Nachricht kann nicht abgerufen werden</string>
     <string name="nc_push_notification_message">Die Push-Benachrichtigung wurde gesendet. Sie sollten nun auf diesem Gerät eine Benachrichtigung mit dem Titel \"Testen von Push-Benachrichtigungen\" erhalten.</string>
+    <string name="nc_reauthorize_different_account">Sie haben sich mit einem anderen Konto angemeldet. Bitte mit dem Konto anmelden, für das Sie die Autorisierung erneuern möchten.</string>
     <string name="nc_remind">Erinnere mich später</string>
     <string name="nc_remote_wipe_logged_out">Die Anmeldeinformationen für dieses Konto waren nicht mehr gültig</string>
     <string name="nc_remove_color">Farbe entfernen</string>

@@ -150,6 +150,7 @@
     <string name="nc_call_button_content_description_hangup">Lõpeta kõne</string>
     <string name="nc_call_button_content_description_microphone">Lülita mikrofon sisse/välja</string>
     <string name="nc_call_button_content_description_pip">Ava pilt-pildis vaade</string>
+    <string name="nc_call_button_content_description_switch_camera">Vaheta kaamerat</string>
     <string name="nc_call_button_content_description_switch_to_self_vide">Näita oma videovaadet</string>
     <string name="nc_call_e2ee_not_supported">Kuna serveris on kasutusel läbiv krüptimine, siis helistamine pole hetkel toetatud</string>
     <string name="nc_call_e2ee_not_supported_title">Helistamine pole saadaval: %s</string>
@@ -164,6 +165,8 @@
     <string name="nc_call_raised_hand">%1$s andis käega märku</string>
     <string name="nc_call_reconnecting">Loon uuesti ühendust…</string>
     <string name="nc_call_ringing">HELISEB</string>
+    <string name="nc_call_self_video_enlarge">Muuda enda video suuremaks</string>
+    <string name="nc_call_self_video_shrink">Muuda enda video väiksemaks</string>
     <string name="nc_call_state_in_call">%1$s vestluses</string>
     <string name="nc_call_state_with_phone">%1$s telefoniga</string>
     <string name="nc_call_state_with_video">%1$s videoga</string>
@@ -365,6 +368,7 @@
     <string name="nc_location_unknown">Asukoht pole teada</string>
     <string name="nc_locked">Lukus</string>
     <string name="nc_locked_tap_to_unlock">Klõpsi lukustuse eemaldamiseks</string>
+    <string name="nc_login_too_many_attempts">Liiga palju vigaseid sisselogimiskatseid sinu võrgust. Palun proovi hiljem uuesti.</string>
     <string name="nc_logs_advanced_logging">Detailne logimine</string>
     <string name="nc_logs_advanced_logging_disable">Lülita detailne logimine välja</string>
     <string name="nc_logs_advanced_logging_enable">Lülita detailne logimine sisse</string>
@@ -397,6 +401,7 @@
     <string name="nc_message_added_to_notes">Teade on lisatud märkmetesse</string>
     <string name="nc_message_failed">Sõnumi saatmine ei õnnestu</string>
     <string name="nc_message_failed_to_send">Sõnumi saatmine ei õnnestunud:</string>
+    <string name="nc_message_not_added_to_notes">Sõnumi lisamine märkmetesse ei õnnestunud</string>
     <string name="nc_message_quote_cancel_reply">Katkesta vastamine</string>
     <string name="nc_message_read">Sõnum on loetud</string>
     <string name="nc_message_scheduled">Sõnum on ajastatud</string>
@@ -475,6 +480,7 @@
     <string name="nc_push_notification_error">Vabandust, midagi läks valesti, veateade on: %1$s</string>
     <string name="nc_push_notification_fetch_error">Vabandust, midagi läks valesti, tõuketeavituse testsõnumit ei õnnestu laadida</string>
     <string name="nc_push_notification_message">Tõuketeavituse saatmine õnnestus. Peaksid selles seadmes nüüd saama tõuketeavituse pealkirjaga „Tõuketeavituse test“</string>
+    <string name="nc_reauthorize_different_account">Sa logisid sisse teise kasutajakontoga. Palun pruugi seda kontot, mida soovid uuesti autentida.</string>
     <string name="nc_remind">Tuleta mulle hiljem meelde</string>
     <string name="nc_remote_wipe_logged_out">Selle kasutajakonto kasutajanimi/salasõna pole enam kehtivad</string>
     <string name="nc_remove_color">Eemalda värv</string>

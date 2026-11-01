@@ -7,11 +7,14 @@
  */
 package com.nextcloud.talk.chat.viewmodels
 
+import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
+import androidx.annotation.StringRes
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LiveData
@@ -42,10 +45,11 @@ import com.nextcloud.talk.dagger.modules.ApplicationScope
 import com.nextcloud.talk.data.database.mappers.toDomainModel
 import com.nextcloud.talk.data.database.model.ChatMessageEntity
 import com.nextcloud.talk.data.user.model.User
-import com.nextcloud.talk.extensions.toIntOrZero
 import com.nextcloud.talk.jobs.ReadMarkerSyncWorker
+import com.nextcloud.talk.jobs.SendMessageWorker
 import com.nextcloud.talk.jobs.ShareOperationWorker
 import androidx.lifecycle.asFlow
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.nextcloud.talk.jobs.UploadAndShareFilesWorker
 import com.nextcloud.talk.logger.Logger
@@ -55,21 +59,21 @@ import com.nextcloud.talk.messagesearch.MessageSearchHelper
 import com.nextcloud.talk.models.MessageDraft
 import com.nextcloud.talk.models.domain.ConversationModel
 import com.nextcloud.talk.models.domain.SearchMessageEntry
-import com.nextcloud.talk.models.json.capabilities.SpreedCapability
-import com.nextcloud.talk.models.json.chat.ChatMessageJson
+import com.nextcloud.talk.models.json.capabilities.SpreedCapabilityDto
+import com.nextcloud.talk.models.json.chat.ChatMessageDto
 import com.nextcloud.talk.models.json.chat.ChatOverallSingleMessage
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
 import com.nextcloud.talk.models.json.conversations.RoomOverall
-import com.nextcloud.talk.models.json.generic.GenericOverall
-import com.nextcloud.talk.models.json.opengraph.Reference
-import com.nextcloud.talk.models.json.reminder.Reminder
-import com.nextcloud.talk.models.json.threads.ThreadInfo
-import com.nextcloud.talk.models.json.upcomingEvents.UpcomingEvent
-import com.nextcloud.talk.models.json.userAbsence.UserAbsenceData
+import com.nextcloud.talk.models.json.opengraph.OpenGraphObjectDto
+import com.nextcloud.talk.models.json.reminder.ReminderDto
+import com.nextcloud.talk.models.json.threads.ThreadInfoDto
+import com.nextcloud.talk.models.json.upcomingEvents.UpcomingEventDto
+import com.nextcloud.talk.models.json.userAbsence.UserAbsenceDataDto
 import com.nextcloud.talk.repositories.reactions.ReactionsRepository
 import com.nextcloud.talk.repositories.unifiedsearch.UnifiedSearchRepository
 import com.nextcloud.talk.threadsoverview.data.ThreadsRepository
 import com.nextcloud.talk.ui.PlaybackSpeed
+import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil.hasSpreedFeatureCapability
 import com.nextcloud.talk.utils.CharacterAvatarUtils
@@ -81,7 +85,7 @@ import com.nextcloud.talk.utils.SpreedFeatures
 import com.nextcloud.talk.utils.UserIdUtils
 import com.nextcloud.talk.utils.throttleLatest
 import com.nextcloud.talk.utils.bundle.BundleKeys
-import com.nextcloud.talk.utils.database.user.CurrentUserProvider
+import com.nextcloud.talk.utils.isTransientFailure
 import com.nextcloud.talk.utils.message.SendMessageUtils
 import com.nextcloud.talk.utils.message.groupHashOf
 import com.nextcloud.talk.utils.preferences.AppPreferences
@@ -98,6 +102,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -133,11 +140,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
+import java.net.HttpURLConnection
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import androidx.core.net.toUri
 
@@ -152,8 +159,9 @@ private const val VCARD_MIMETYPE = "text/vcard"
 internal fun groupHash(referenceId: String?): String? = groupHashOf(referenceId)
 
 // A run of consecutive single-file share messages from the same author, uploaded together in one
-// batch - whether still uploading or already synced - either kept as-is (Single) or merged into
-// one grouped "album" bubble (Group) - see ChatViewModel.combineFileShareGroups().
+// batch - whether still uploading or already synced - either kept as-is (Single), merged into
+// one grouped "album" bubble (Group) or, once deleted, shown as its last message only (Collapsed) -
+// see ChatViewModel.combineFileShareGroups().
 internal sealed interface CombinedUnit {
     val messages: List<ChatMessageUi>
 
@@ -162,6 +170,8 @@ internal sealed interface CombinedUnit {
     }
 
     data class Group(override val messages: List<ChatMessageUi>) : CombinedUnit
+
+    data class Collapsed(override val messages: List<ChatMessageUi>) : CombinedUnit
 }
 
 /**
@@ -169,7 +179,8 @@ internal sealed interface CombinedUnit {
  * (Media) or still mid-upload (UploadingMedia), so a batch groups into one bubble immediately as
  * it starts uploading rather than only once every file has synced. Mirrors web's
  * isCombinableFileMessage() otherwise: excludes system/voice/geo/poll/deck/text messages (via the
- * content-type check), deleted or failed messages, contact cards and audio files.
+ * content-type check), deleted or failed messages, contact cards and audio files. Deleted messages
+ * are collapsed separately by combineFileShareGroups().
  */
 internal fun isCombinableFileShare(message: ChatMessageUi): Boolean {
     val mimeType = when (val content = message.content) {
@@ -183,33 +194,41 @@ internal fun isCombinableFileShare(message: ChatMessageUi): Boolean {
         !MimetypeUtils.isAudioOnly(mimeType)
 }
 
-/** Two file shares belong to the same batch: same reply target and same upload-batch hash. */
+/**
+ * Two file shares belong to the same batch: both deleted or both not, same reply target and same
+ * upload-batch hash.
+ */
 internal fun canCombineFileShares(a: ChatMessageUi, b: ChatMessageUi): Boolean {
     val hash = groupHash(a.referenceId)
-    return a.parentMessage?.id == b.parentMessage?.id && hash != null && hash == groupHash(b.referenceId)
+    return a.isDeleted == b.isDeleted &&
+        a.parentMessage?.id == b.parentMessage?.id &&
+        hash != null &&
+        hash == groupHash(b.referenceId)
 }
 
 /**
  * Replaces consecutive file shares uploaded together in one batch with a single grouped unit.
  * A message that isn't a plain file share, a reply to a different message, or part of another
  * batch interrupts the run. A file share with a real caption (not just the "{file}" placeholder)
- * ends its group - the caption belongs to the group's last item, same as web.
+ * ends its group - the caption belongs to the group's last item, same as web. Deleted file shares
+ * of the same batch collapse into their last deleted message.
  */
 internal fun combineFileShareGroups(uiMessages: List<ChatMessageUi>): List<CombinedUnit> {
     val result = mutableListOf<CombinedUnit>()
     var pending = mutableListOf<ChatMessageUi>()
 
     fun flush() {
-        when (pending.size) {
-            0 -> {}
-            1 -> result.add(CombinedUnit.Single(pending[0]))
+        when {
+            pending.isEmpty() -> {}
+            pending.size == 1 -> result.add(CombinedUnit.Single(pending[0]))
+            pending[0].isDeleted -> result.add(CombinedUnit.Collapsed(pending.toList()))
             else -> result.add(CombinedUnit.Group(pending.toList()))
         }
         pending = mutableListOf()
     }
 
     for (message in uiMessages) {
-        if (!isCombinableFileShare(message)) {
+        if (!message.isDeleted && !isCombinableFileShare(message)) {
             flush()
             result.add(CombinedUnit.Single(message))
             continue
@@ -221,7 +240,7 @@ internal fun combineFileShareGroups(uiMessages: List<ChatMessageUi>): List<Combi
 
         pending.add(message)
 
-        if (message.plainMessage != FILE_PLACEHOLDER_MESSAGE) {
+        if (!message.isDeleted && message.plainMessage != FILE_PLACEHOLDER_MESSAGE) {
             flush()
         }
     }
@@ -273,8 +292,9 @@ class ChatViewModel @AssistedInject constructor(
     private val unifiedSearchRepository: UnifiedSearchRepository,
     private val mediaRecorderManager: MediaRecorderManager,
     private val audioFocusRequestManager: AudioFocusRequestManager,
-    private val currentUserProvider: CurrentUserProvider,
+    private val userManager: UserManager,
     @ApplicationScope private val appScope: CoroutineScope,
+    @Assisted private val initialUser: User,
     @Assisted private val chatRoomToken: String,
     @Assisted private val conversationThreadId: Long?
 ) : ViewModel(),
@@ -282,6 +302,9 @@ class ChatViewModel @AssistedInject constructor(
 
     @Inject
     lateinit var arbitraryStorageManager: ArbitraryStorageManager
+
+    // Epoch seconds like ChatMessageEntity.timestamp; see failOrphanedPendingMessages.
+    private val createdAtSeconds = System.currentTimeMillis() / MILLIS_PER_SECOND
 
     enum class LifeCycleFlag {
         PAUSED,
@@ -318,8 +341,11 @@ class ChatViewModel @AssistedInject constructor(
             get() = results.getOrNull(selectedIndex)
     }
 
-    @Deprecated("use currentUserFlow")
-    lateinit var currentUser: User
+    /**
+     * The user of this chat with its latest stored values.
+     */
+    val currentUser: User
+        get() = currentUserFlow.value ?: initialUser
 
     private var messageSearchHelper: MessageSearchHelper? = null
     private var searchRequestJob: Job? = null
@@ -349,13 +375,11 @@ class ChatViewModel @AssistedInject constructor(
     lateinit var currentLifeCycleFlag: LifeCycleFlag
     val disposableSet = mutableSetOf<Disposable>()
 
-    private val referenceCache = ConcurrentHashMap<String, Reference>()
-
     var messageDraft: MessageDraft = MessageDraft()
     var hiddenUpcomingEvent: String? = null
     lateinit var participantPermissions: ParticipantPermissions
-    private val _spreedCapabilities = MutableStateFlow<SpreedCapability?>(null)
-    val spreedCapabilities: StateFlow<SpreedCapability?> = _spreedCapabilities
+    private val _spreedCapabilities = MutableStateFlow<SpreedCapabilityDto?>(null)
+    val spreedCapabilities: StateFlow<SpreedCapabilityDto?> = _spreedCapabilities
 
     private var lobbyPollingJob: Job? = null
 
@@ -463,6 +487,8 @@ class ChatViewModel @AssistedInject constructor(
     override fun onPause(owner: LifecycleOwner) {
         super.onPause(owner)
         currentLifeCycleFlag = LifeCycleFlag.PAUSED
+        roomJoinClaimed = false
+        joinRoomJob?.cancel()
         disposableSet.forEach { disposable -> disposable.dispose() }
         disposableSet.clear()
         searchRequestJob?.cancel()
@@ -477,12 +503,15 @@ class ChatViewModel @AssistedInject constructor(
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
         currentLifeCycleFlag = LifeCycleFlag.STOPPED
-        mediaRecorderManager.handleOnStop()
+        // a rotation stops the activity but not the recording: the new activity goes on with it
+        if ((owner as? Activity)?.isChangingConfigurations != true) {
+            mediaRecorderManager.handleOnStop()
+        }
         chatRepository.handleOnStop()
         mediaPlayerManager.handleOnStop()
     }
 
-    fun onSignalingChatMessageReceived(chatMessages: List<ChatMessageJson>) {
+    fun onSignalingChatMessageReceived(chatMessages: List<ChatMessageDto>) {
         viewModelScope.launch {
             chatRepository.onSignalingChatMessageReceived(chatMessages)
         }
@@ -572,7 +601,7 @@ class ChatViewModel @AssistedInject constructor(
     sealed interface ViewState
 
     object GetReminderStartState : ViewState
-    open class GetReminderExistState(val reminder: Reminder) : ViewState
+    open class GetReminderExistState(val reminder: ReminderDto) : ViewState
     object GetReminderStateSet : ViewState
 
     private val _getReminderExistState: MutableLiveData<ViewState> = MutableLiveData(GetReminderStartState)
@@ -583,10 +612,10 @@ class ChatViewModel @AssistedInject constructor(
     object GetCapabilitiesStartState : ViewState
     object GetCapabilitiesErrorState : ViewState
     open class GetCapabilitiesInitialLoadState(
-        val spreedCapabilities: SpreedCapability,
+        val spreedCapabilities: SpreedCapabilityDto,
         val conversationModel: ConversationModel
     ) : ViewState
-    open class GetCapabilitiesUpdateState(val spreedCapabilities: SpreedCapability) : ViewState
+    open class GetCapabilitiesUpdateState(val spreedCapabilities: SpreedCapabilityDto) : ViewState
 
     private val _getCapabilitiesViewState: MutableLiveData<ViewState> = MutableLiveData(GetCapabilitiesStartState)
     val getCapabilitiesViewState: LiveData<ViewState>
@@ -640,6 +669,10 @@ class ChatViewModel @AssistedInject constructor(
     private val _reactionFailures = MutableSharedFlow<ReactionOperation>(extraBufferCapacity = 1)
     val reactionFailures: SharedFlow<ReactionOperation> = _reactionFailures
 
+    /** A reminder or a share to notes that the server refused, for the chat to report. */
+    private val _actionFailures = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val actionFailures: SharedFlow<Int> = _actionFailures
+
     private val reactionLocks = mutableMapOf<Int, Mutex>()
 
     @Volatile private var firstUnreadMessageId: Int? = null
@@ -683,18 +716,20 @@ class ChatViewModel @AssistedInject constructor(
     // Current user flows
     // ------------------------------
     private val currentUserFlow: StateFlow<User?> =
-        currentUserProvider.currentUserFlow
-            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        userManager.userFlow(initialUser.id!!)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, initialUser)
 
     private val nonNullUserFlow = currentUserFlow.filterNotNull()
+
+    // Emits once per bound user, so updates of the user row (e.g. capabilities) don't restart dependent flows.
+    private val boundUserFlow = nonNullUserFlow.distinctUntilChangedBy { it.id }
 
     // Unlike conversationFlow below, this is not deduped by lastReadMessage/lastCommonReadMessage,
     // so it also reacts to fields those two ignore, e.g. hasCall (see [hasCall]).
     private val rawConversationFlow: Flow<ConversationModel> =
-        nonNullUserFlow
+        boundUserFlow
             .flatMapLatest { user ->
-                val userId = requireNotNull(user.id)
-                conversationRepository.observeConversation(userId, chatRoomToken)
+                conversationRepository.observeConversation(requireNotNull(user.id), chatRoomToken)
             }
             .mapNotNull { result ->
                 when (result) {
@@ -781,6 +816,11 @@ class ChatViewModel @AssistedInject constructor(
     // Last read message cache
     // ------------------------------
     private var lastReadMessage: Int = 0
+
+    private var roomJoinClaimed = false
+    private var isInitialLoadDelivered = false
+    private var leaveRoomJob: Job? = null
+    private var joinRoomJob: Job? = null
 
     // ------------------------------
     // Initialization
@@ -963,9 +1003,7 @@ class ChatViewModel @AssistedInject constructor(
         val targetThreadId = result.threadId?.toLongOrNull()?.takeIf { result.isThreadReplyResult() }
 
         viewModelScope.launch {
-            val foundLocally = _uiState.value.items.any {
-                (it as? ChatItem.MessageItem)?.uiMessage?.id == messageId.toInt()
-            }
+            val foundLocally = _uiState.value.items.any { it.containsMessage(messageId.toInt()) }
             if (!foundLocally) {
                 loadMessageContextAndSwitchMode(
                     messageId = messageId,
@@ -979,9 +1017,7 @@ class ChatViewModel @AssistedInject constructor(
 
     fun jumpToQuotedMessage(messageId: Long) {
         viewModelScope.launch {
-            val foundLocally = _uiState.value.items.any {
-                (it as? ChatItem.MessageItem)?.uiMessage?.id == messageId.toInt()
-            }
+            val foundLocally = _uiState.value.items.any { it.containsMessage(messageId.toInt()) }
             if (!foundLocally) {
                 loadMessageContextAndSwitchMode(
                     messageId = messageId,
@@ -1095,22 +1131,34 @@ class ChatViewModel @AssistedInject constructor(
         _uiState.update { current ->
             val updatedItems = current.items.map { item ->
                 if (item is ChatItem.MessageItem && item.uiMessage.id == message.jsonMessageId) {
-                    val voiceContent = item.uiMessage.content as? MessageTypeContent.Voice
-                    if (voiceContent != null) {
-                        val updatedVoiceContent = voiceContent.copy(
-                            actorId = message.actorId,
-                            isPlaying = message.isPlayingVoiceMessage,
-                            wasPlayed = message.wasPlayedVoiceMessage,
-                            isDownloading = message.isDownloadingVoiceMessage,
-                            durationSeconds = message.voiceMessageDuration,
-                            playedSeconds = message.voiceMessagePlayedSeconds,
-                            seekbarProgress = message.voiceMessageSeekbarProgress,
-                            waveform = message.voiceMessageFloatArray?.toList() ?: voiceContent.waveform
-                            // playbackSpeed is preserved from existing voiceContent
-                        )
-                        item.copy(uiMessage = item.uiMessage.copy(content = updatedVoiceContent))
-                    } else {
-                        item
+                    when (val content = item.uiMessage.content) {
+                        is MessageTypeContent.Voice -> {
+                            val updatedVoiceContent = content.copy(
+                                actorId = message.actorId,
+                                isPlaying = message.isPlayingVoiceMessage,
+                                wasPlayed = message.wasPlayedVoiceMessage,
+                                isDownloading = message.isDownloadingVoiceMessage,
+                                durationSeconds = message.voiceMessageDuration,
+                                playedSeconds = message.voiceMessagePlayedSeconds,
+                                seekbarProgress = message.voiceMessageSeekbarProgress,
+                                waveform = message.voiceMessageFloatArray?.toList() ?: content.waveform
+                                // playbackSpeed is preserved from existing content
+                            )
+                            item.copy(uiMessage = item.uiMessage.copy(content = updatedVoiceContent))
+                        }
+
+                        is MessageTypeContent.AudioFile -> {
+                            val updatedAudioFileContent = content.copy(
+                                isPlaying = message.isPlayingVoiceMessage,
+                                isDownloading = message.isDownloadingVoiceMessage,
+                                durationSeconds = message.voiceMessageDuration,
+                                playedSeconds = message.voiceMessagePlayedSeconds,
+                                seekbarProgress = message.voiceMessageSeekbarProgress
+                            )
+                            item.copy(uiMessage = item.uiMessage.copy(content = updatedAudioFileContent))
+                        }
+
+                        else -> item
                     }
                 } else {
                     item
@@ -1140,7 +1188,7 @@ class ChatViewModel @AssistedInject constructor(
     }
 
     private fun observeLobbyState() {
-        val conversationFromDb = nonNullUserFlow
+        val conversationFromDb = boundUserFlow
             .flatMapLatest { user ->
                 conversationRepository.observeConversation(requireNotNull(user.id), chatRoomToken)
             }
@@ -1180,7 +1228,7 @@ class ChatViewModel @AssistedInject constructor(
     }
 
     private fun observePinnedMessage() {
-        nonNullUserFlow
+        boundUserFlow
             .flatMapLatest { user ->
                 conversationRepository.observeConversation(requireNotNull(user.id), chatRoomToken)
                     .mapNotNull { result ->
@@ -1247,7 +1295,7 @@ class ChatViewModel @AssistedInject constructor(
         val conversationLastRead: Int,
         val expandedParents: Set<Int> = emptySet(),
         val conversation: ConversationModel? = null,
-        val capabilities: SpreedCapability? = null
+        val capabilities: SpreedCapabilityDto? = null
     )
 
     // The conversation's own hasCall is the server's authoritative answer to "is a call currently
@@ -1408,6 +1456,9 @@ class ChatViewModel @AssistedInject constructor(
                         add(ChatItem.MessageItem(adjustedMessage))
                     }
                     is CombinedUnit.Group -> add(ChatItem.MediaGroupItem(messages))
+                    is CombinedUnit.Collapsed -> add(
+                        ChatItem.MessageItem(representative, collapsedMessageIds = messages.dropLast(1).map { it.id })
+                    )
                 }
             }
         }.asReversed()
@@ -1712,7 +1763,7 @@ class ChatViewModel @AssistedInject constructor(
      * - those get their avatar drawn on the client instead, see [CharacterAvatarUtils].
      */
     fun getAvatarUrl(message: ChatMessage): String =
-        if (this::currentUser.isInitialized && !message.hasClientSideAvatar()) {
+        if (!message.hasClientSideAvatar()) {
             ApiUtils.getUrlForAvatar(
                 currentUser.baseUrl,
                 message.actorId,
@@ -1725,15 +1776,13 @@ class ChatViewModel @AssistedInject constructor(
     private fun ChatMessage.hasClientSideAvatar(): Boolean =
         CharacterAvatarUtils.avatarFor(actorType, actorId, actorDisplayName, guestLabel = null) != null
 
-    fun initData(user: User, credentials: String, urlForChatting: String, threadId: Long?) {
-        currentUser = user
-
+    fun initData() {
         chatRepository.initData(
-            user,
-            credentials,
-            urlForChatting,
+            currentUser,
+            ApiUtils.getCredentials(currentUser.username, currentUser.token)!!,
+            ApiUtils.getUrlForChat(ApiUtils.API_V1, currentUser.baseUrl, chatRoomToken),
             chatRoomToken,
-            threadId
+            conversationThreadId
         )
 
         observeConversationAndUserFirstTime()
@@ -1778,7 +1827,8 @@ class ChatViewModel @AssistedInject constructor(
                 spreedCapability,
                 conversationModel
             )
-            if (_getCapabilitiesViewState.value == GetCapabilitiesStartState) {
+            if (isInitialLoadPending()) {
+                isInitialLoadDelivered = true
                 _getCapabilitiesViewState.value = GetCapabilitiesInitialLoadState(
                     spreedCapability,
                     conversationModel
@@ -1791,17 +1841,18 @@ class ChatViewModel @AssistedInject constructor(
             chatNetworkDataSource.getCapabilities(user, token)
                 .subscribeOn(Schedulers.io())
                 ?.observeOn(AndroidSchedulers.mainThread())
-                ?.subscribe(object : Observer<SpreedCapability> {
+                ?.subscribe(object : Observer<SpreedCapabilityDto> {
                     override fun onSubscribe(d: Disposable) {
                         disposableSet.add(d)
                     }
 
-                    override fun onNext(spreedCapabilities: SpreedCapability) {
+                    override fun onNext(spreedCapabilities: SpreedCapabilityDto) {
                         participantPermissions = ParticipantPermissions(
                             spreedCapabilities,
                             conversationModel
                         )
-                        if (_getCapabilitiesViewState.value == GetCapabilitiesStartState) {
+                        if (isInitialLoadPending()) {
+                            isInitialLoadDelivered = true
                             _getCapabilitiesViewState.value = GetCapabilitiesInitialLoadState(
                                 spreedCapabilities,
                                 conversationModel
@@ -1824,27 +1875,47 @@ class ChatViewModel @AssistedInject constructor(
         }
     }
 
+    /**
+     * A failed first load of the capabilities is retried by the next refresh of the conversation, which then is the
+     * initial load. A failed refresh after the initial load is not.
+     */
+    private fun isInitialLoadPending(): Boolean = !isInitialLoadDelivered
+
+    /**
+     * Joins after a leave that is still running, so the server never handles the leave after the join. The wait is
+     * cancelled when the screen is paused.
+     */
     fun joinRoom(user: User, token: String, roomPassword: String) {
         _joinRoomViewState.value = JoinRoomStartState
-        chatNetworkDataSource.joinRoom(user, token, roomPassword)
-            .subscribeOn(Schedulers.io())
-            ?.observeOn(AndroidSchedulers.mainThread())
-            ?.retry(JOIN_ROOM_RETRY_COUNT)
-            ?.subscribe(JoinRoomObserver())
+        joinRoomJob?.cancel()
+        joinRoomJob = viewModelScope.launch {
+            leaveRoomJob?.join()
+            chatNetworkDataSource.joinRoom(user, token, roomPassword)
+                .subscribeOn(Schedulers.io())
+                ?.observeOn(AndroidSchedulers.mainThread())
+                ?.retry(JOIN_ROOM_RETRY_COUNT)
+                ?.subscribe(JoinRoomObserver())
+        }
     }
 
     fun setReminder(user: User, roomToken: String, messageId: String, timestamp: Int, chatApiVersion: Int) {
-        chatNetworkDataSource.setReminder(user, roomToken, messageId, timestamp, chatApiVersion)
-            .subscribeOn(Schedulers.io())
-            ?.observeOn(AndroidSchedulers.mainThread())
-            ?.subscribe(SetReminderObserver())
+        requestWithFeedback("set the reminder", R.string.nc_common_error_sorry) {
+            chatNetworkDataSource.setReminder(user, roomToken, messageId, timestamp, chatApiVersion)
+        }
     }
 
+    @Suppress("Detekt.TooGenericExceptionCaught")
     fun getReminder(user: User, roomToken: String, messageId: String, chatApiVersion: Int) {
-        chatNetworkDataSource.getReminder(user, roomToken, messageId, chatApiVersion)
-            .subscribeOn(Schedulers.io())
-            ?.observeOn(AndroidSchedulers.mainThread())
-            ?.subscribe(GetReminderObserver())
+        viewModelScope.launch {
+            _getReminderExistState.value = try {
+                GetReminderExistState(chatNetworkDataSource.getReminder(user, roomToken, messageId, chatApiVersion))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.d(TAG, "Error when getting reminder", e)
+                GetReminderStartState
+            }
+        }
     }
 
     fun overrideReminderState() {
@@ -1852,30 +1923,14 @@ class ChatViewModel @AssistedInject constructor(
     }
 
     fun deleteReminder(user: User, roomToken: String, messageId: String, chatApiVersion: Int) {
-        chatNetworkDataSource.deleteReminder(user, roomToken, messageId, chatApiVersion)
-            .subscribeOn(Schedulers.io())
-            ?.observeOn(AndroidSchedulers.mainThread())
-            ?.subscribe(object : Observer<GenericOverall> {
-                override fun onSubscribe(d: Disposable) {
-                    disposableSet.add(d)
-                }
-
-                override fun onNext(genericOverall: GenericOverall) {
-                    _getReminderExistState.value = GetReminderStartState
-                }
-
-                override fun onError(e: Throwable) {
-                    Log.d(TAG, "Error when deleting reminder", e)
-                }
-
-                override fun onComplete() {
-                    // unused atm
-                }
-            })
+        requestWithFeedback("delete the reminder", R.string.nc_common_error_sorry) {
+            chatNetworkDataSource.deleteReminder(user, roomToken, messageId, chatApiVersion)
+            _getReminderExistState.value = GetReminderStartState
+        }
     }
 
     fun leaveRoom(credentials: String, url: String, functionToCallAfterLeave: (() -> Unit)?) {
-        appScope.launch {
+        leaveRoomJob = appScope.launch {
             try {
                 val result = chatNetworkDataSource.leaveRoom(credentials, url)
                 if (result.ocs?.meta?.statusCode == HTTP_CODE_OK) {
@@ -1885,7 +1940,6 @@ class ChatViewModel @AssistedInject constructor(
                 }
                 withContext(Dispatchers.Main) {
                     _leaveRoomViewState.value = LeaveRoomSuccessState
-                    _getCapabilitiesViewState.value = GetCapabilitiesStartState
                     functionToCallAfterLeave?.invoke()
                 }
             } catch (e: Exception) {
@@ -1959,7 +2013,32 @@ class ChatViewModel @AssistedInject constructor(
         }
     }
 
+    /**
+     * A PENDING text message is only sent by SendMessageWorker. Without send work left for the
+     * conversation it would show the clock forever, so it is marked FAILED and the user can resend or
+     * delete it. Only messages created before this view model are considered: loadInitialMessages
+     * runs on every activity creation (e.g. rotation), and a message sent just now may not have its
+     * work written to WorkManager yet.
+     */
+    @Suppress("Detekt.TooGenericExceptionCaught")
+    private suspend fun failOrphanedPendingMessages() {
+        try {
+            val internalConversationId = "${currentUser.id}@$chatRoomToken"
+            if (!SendMessageWorker.hasActiveSend(WorkManager.getInstance(), internalConversationId)) {
+                val failed = chatRepository.failPendingMessagesWithoutSendWork(createdAtSeconds)
+                if (failed > 0) {
+                    Log.w(TAG, "Marked $failed pending message(s) without send work as failed")
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not check for pending messages without send work", e)
+        }
+    }
+
     suspend fun loadInitialMessages(withCredentials: String, withUrl: String) {
+        failOrphanedPendingMessages()
         val bundle = Bundle()
         bundle.putString(BundleKeys.KEY_CHAT_URL, withUrl)
         bundle.putString(BundleKeys.KEY_CREDENTIALS, withCredentials)
@@ -2010,26 +2089,31 @@ class ChatViewModel @AssistedInject constructor(
         }
     }
 
-    fun deleteChatMessages(credentials: String, url: String, messageId: Int) {
+    fun messageIdsToDelete(messageId: Int): List<Int> = messageIdsToDelete(_uiState.value.items, messageId)
+
+    fun deleteChatMessages(credentials: String, urlsByMessageId: Map<Int, String>) {
         val deletedPlaceholder = NextcloudTalkApplication.sharedApplication!!
             .getString(R.string.message_deleted_by_you)
 
         viewModelScope.launch {
-            val result = chatRepository.deleteChatMessage(
-                credentials,
-                url,
-                messageId.toLong(),
-                deletedPlaceholder
-            )
+            val results = urlsByMessageId.map { (messageId, url) ->
+                async {
+                    chatRepository.deleteChatMessage(credentials, url, messageId.toLong(), deletedPlaceholder)
+                        .onFailure { throwable ->
+                            Log.e(TAG, "Failed to delete message with id $messageId", throwable)
+                        }
+                }
+            }.awaitAll()
 
-            result
-                .onSuccess { message ->
-                    message?.let { _deleteChatMessageViewState.value = DeleteChatMessageSuccessState(it) }
-                }
-                .onFailure { throwable ->
-                    Log.e(TAG, "Something went wrong when trying to delete message with id $messageId", throwable)
-                    _deleteChatMessageViewState.value = DeleteChatMessageErrorState
-                }
+            if (results.any { it.isFailure }) {
+                _deleteChatMessageViewState.value = DeleteChatMessageErrorState
+                return@launch
+            }
+
+            val responses = results.mapNotNull { it.getOrNull() }
+            val response = responses.firstOrNull { it.ocs?.meta?.statusCode == HttpURLConnection.HTTP_ACCEPTED }
+                ?: responses.firstOrNull()
+            response?.let { _deleteChatMessageViewState.value = DeleteChatMessageSuccessState(it) }
         }
     }
 
@@ -2090,10 +2174,6 @@ class ChatViewModel @AssistedInject constructor(
      * simply leaving the chat, would immediately mark everything read again.
      */
     fun markChatAsUnread(lastReadMessage: Int) {
-        if (!this::currentUser.isInitialized) {
-            return
-        }
-
         keepMarkedAsUnread = true
         localLastReadMessage = lastReadMessage
         resetUnreadMarkerCache()
@@ -2111,9 +2191,6 @@ class ChatViewModel @AssistedInject constructor(
     }
 
     fun setChatReadMessage(lastReadMessage: Int) {
-        if (!this::currentUser.isInitialized) {
-            return
-        }
         // marking as read is the explicit counterpart of marking as unread and hands the read marker
         // back to the automatic handling
         keepMarkedAsUnread = false
@@ -2131,26 +2208,9 @@ class ChatViewModel @AssistedInject constructor(
     }
 
     fun shareToNotes(credentials: String, url: String, message: String, displayName: String) {
-        chatNetworkDataSource.shareToNotes(credentials, url, message, displayName)
-            .subscribeOn(Schedulers.io())
-            ?.observeOn(AndroidSchedulers.mainThread())
-            ?.subscribe(object : Observer<ChatOverallSingleMessage> {
-                override fun onSubscribe(d: Disposable) {
-                    disposableSet.add(d)
-                }
-
-                override fun onNext(genericOverall: ChatOverallSingleMessage) {
-                    // unused atm
-                }
-
-                override fun onError(e: Throwable) {
-                    Log.d(TAG, "Error when sharing to notes $e")
-                }
-
-                override fun onComplete() {
-                    // unused atm
-                }
-            })
+        shareToNotes("share the message to notes", credentials, url) { referenceId ->
+            chatNetworkDataSource.shareToNotes(credentials, url, message, displayName, referenceId)
+        }
     }
 
     suspend fun checkForNoteToSelf(credentials: String, baseUrl: String): ConversationModel? =
@@ -2172,27 +2232,111 @@ class ChatViewModel @AssistedInject constructor(
             null
         }
 
-    fun shareLocationToNotes(credentials: String, url: String, objectType: String, objectId: String, metadata: String) {
-        chatNetworkDataSource.shareLocationToNotes(credentials, url, objectType, objectId, metadata)
-            .subscribeOn(Schedulers.io())
-            ?.observeOn(AndroidSchedulers.mainThread())
-            ?.subscribe(object : Observer<GenericOverall> {
-                override fun onSubscribe(d: Disposable) {
-                    disposableSet.add(d)
-                }
+    fun shareLocationToNotes(
+        credentials: String,
+        url: String,
+        chatUrl: String,
+        objectType: String,
+        objectId: String,
+        metadata: String
+    ) {
+        shareToNotes("share the location to notes", credentials, chatUrl) { referenceId ->
+            chatNetworkDataSource.shareLocationToNotes(credentials, url, objectType, objectId, metadata, referenceId)
+        }
+    }
 
-                override fun onNext(genericOverall: GenericOverall) {
-                    // unused atm
-                }
+    /**
+     * Shares to the note to self and, when the share failed for a transient reason, asks the note to
+     * self whether the message arrived anyway before sending it a second time. The server stores the
+     * reference id of a message without ever looking at it again, so it deduplicates nothing: a blind
+     * second attempt after a timeout the server did accept posts the note twice.
+     */
+    private fun shareToNotes(
+        description: String,
+        credentials: String,
+        lookupUrl: String,
+        share: suspend (String) -> Unit
+    ) {
+        val referenceId = SendMessageUtils().generateReferenceId()
 
-                override fun onError(e: Throwable) {
-                    Log.e(TAG, "Error when sharing location to notes $e")
-                }
+        viewModelScope.launch {
+            val failure = attemptShare(share, referenceId) ?: return@launch
 
-                override fun onComplete() {
-                    // unused atm
-                }
-            })
+            if (!isTransientFailure(failure)) {
+                reportShareFailure(description, failure)
+                return@launch
+            }
+
+            when (alreadyShared(credentials, lookupUrl, referenceId)) {
+                true -> Unit
+                false -> attemptShare(share, referenceId)?.let { reportShareFailure(description, it) }
+                null -> reportShareFailure(description, failure)
+            }
+        }
+    }
+
+    /** Runs the share once and reports what went wrong, or null when it worked. */
+    @Suppress("Detekt.TooGenericExceptionCaught")
+    private suspend fun attemptShare(share: suspend (String) -> Unit, referenceId: String): Exception? =
+        try {
+            share(referenceId)
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e
+        }
+
+    /**
+     * Whether the note to self already holds the message of this share, or null when the lookup could
+     * not be answered. An unanswered lookup is not retried, because posting a second copy is worse than
+     * not retrying, but it is reported rather than passed off as a message that arrived.
+     */
+    @Suppress("Detekt.TooGenericExceptionCaught")
+    private suspend fun alreadyShared(credentials: String, lookupUrl: String, referenceId: String): Boolean? =
+        try {
+            val fieldMap = hashMapOf(
+                "lookIntoFuture" to 0,
+                "includeLastKnown" to 1,
+                "setReadMarker" to 0,
+                "markNotificationsAsRead" to 0,
+                "timeout" to 0,
+                "limit" to SHARE_LOOKUP_LIMIT
+            )
+            val recent = chatNetworkDataSource.pullChatMessages(credentials, lookupUrl, fieldMap)
+            holdsShare(recent.body()?.ocs?.data, referenceId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.w(TAG, "Could not check whether the share arrived, so it is not sent again", e)
+            null
+        }
+
+    private suspend fun reportShareFailure(description: String, throwable: Throwable) {
+        logger.e(TAG, "Failed to $description", throwable)
+        _actionFailures.emit(R.string.nc_message_not_added_to_notes)
+    }
+
+    /**
+     * Runs an action whose only visible outcome is whether it worked. The reminder dialog is already
+     * dismissed and the chat has already said the message was sent by the time the answer arrives, so
+     * a failure that is not reported here is never reported at all.
+     *
+     * Deliberately without a retry: sharing to notes posts a message with a reference id generated per
+     * call, so a second attempt after a timeout the server did accept would post it twice.
+     */
+    @Suppress("Detekt.TooGenericExceptionCaught")
+    private fun requestWithFeedback(description: String, @StringRes failureMessage: Int, request: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                request()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.e(TAG, "Failed to $description", e)
+                _actionFailures.emit(failureMessage)
+            }
+        }
     }
 
     fun deleteReaction(roomToken: String, chatMessage: ChatMessage, emoji: String) {
@@ -2348,9 +2492,42 @@ class ChatViewModel @AssistedInject constructor(
         try {
             require(fileUri.isNotEmpty())
 
+            val internalConversationId = "${currentUser.id}@$chatRoomToken"
+            val enqueueUpload = {
+                UploadAndShareFilesWorker.upload(
+                    userId = currentUser.id!!,
+                    fileUri = fileUri,
+                    roomToken = room,
+                    conversationName = displayName,
+                    metaData = metaData,
+                    referenceId = referenceId,
+                    internalConversationId = internalConversationId,
+                    compressImages = compressImages,
+                    allowUpdate = allowUpdate
+                )
+            }
+
+            // enqueued right here, in the order of the calls: the queue of a conversation is chained, and the
+            // slow lookup of the file info below must neither reorder the files nor die with the view model
+            val workerId = enqueueUpload()
             if (!isVoiceMessage) {
-                val (fileName, mimeType, fileSize) = resolveFileInfo(fileUri)
+                uploadReferenceToWorkId[referenceId] = workerId
+                _uploadedLocalPreviewMap.update { it + (referenceId to fileUri) }
+
                 viewModelScope.launch {
+                    // getType/query are blocking binder calls into the provider's process (e.g. Nextcloud Files)
+                    val (fileName, mimeType, fileSize) = withContext(Dispatchers.IO) {
+                        try {
+                            resolveFileInfo(fileUri)
+                        } catch (e: IllegalArgumentException) {
+                            // unknown or revoked uri: the worker reports the failed upload, the placeholder stays
+                            Log.w(TAG, "Could not resolve file info of the file to send", e)
+                            Triple(fileUri.toUri().lastPathSegment.orEmpty(), null, 0L)
+                        } catch (e: SecurityException) {
+                            Log.w(TAG, "No access to the file info of the file to send", e)
+                            Triple(fileUri.toUri().lastPathSegment.orEmpty(), null, 0L)
+                        }
+                    }
                     chatRepository.addUploadPlaceholderMessage(
                         localFileUri = fileUri,
                         fileName = fileName,
@@ -2359,25 +2536,11 @@ class ChatViewModel @AssistedInject constructor(
                         fileSize = fileSize,
                         referenceId = referenceId
                     ).collect {}
+
+                    // observed only now: a failure the worker reported before the placeholder existed is
+                    // delivered with the current state and marks the placeholder that was just added
+                    observeUploadProgress(workerId, referenceId)
                 }
-            }
-
-            val internalConversationId = "${currentUser.id}@$chatRoomToken"
-            val workerId = UploadAndShareFilesWorker.upload(
-                fileUri = fileUri,
-                roomToken = room,
-                conversationName = displayName,
-                metaData = metaData,
-                referenceId = referenceId,
-                internalConversationId = internalConversationId,
-                compressImages = compressImages,
-                allowUpdate = allowUpdate
-            )
-
-            if (!isVoiceMessage) {
-                uploadReferenceToWorkId[referenceId] = workerId
-                _uploadedLocalPreviewMap.update { it + (referenceId to fileUri) }
-                observeUploadProgress(workerId, referenceId)
             }
         } catch (e: IllegalArgumentException) {
             Log.e(javaClass.simpleName, "Something went wrong when trying to upload file", e)
@@ -2410,6 +2573,9 @@ class ChatViewModel @AssistedInject constructor(
                 if (progress >= 0) {
                     _uploadProgressMap.update { it + (referenceId to progress) }
                 }
+                if (workInfo.state == WorkInfo.State.FAILED) {
+                    viewModelScope.launch { chatRepository.markUploadPlaceholderFailed(referenceId) }
+                }
                 if (workInfo.state.isFinished) {
                     _uploadProgressMap.update { it - referenceId }
                     uploadReferenceToWorkId.remove(referenceId)
@@ -2430,7 +2596,20 @@ class ChatViewModel @AssistedInject constructor(
         _getVoiceRecordingLocked.postValue(boolean)
     }
 
+    /**
+     * Allows one join of the room per resume of the chat screen. The claim is released when the screen is paused,
+     * where the chat leaves the room.
+     */
+    fun claimRoomJoin(): Boolean {
+        if (roomJoinClaimed) {
+            return false
+        }
+        roomJoinClaimed = true
+        return true
+    }
+
     fun handleOrientationChange() {
+        isInitialLoadDelivered = false
         _getCapabilitiesViewState.value = GetCapabilitiesStartState
     }
 
@@ -2448,7 +2627,7 @@ class ChatViewModel @AssistedInject constructor(
     fun getMessageById(messageId: Long): Flow<ChatMessage> {
         val urlForChatting = ApiUtils.getUrlForChat(
             1, // Keep API v1 for local message lookup until version wiring is centralized.
-            currentUser?.baseUrl,
+            currentUser.baseUrl,
             chatRoomToken
         )
 
@@ -2473,43 +2652,6 @@ class ChatViewModel @AssistedInject constructor(
         override fun onError(e: Throwable) {
             Log.e(TAG, "Error when joining room")
             _joinRoomViewState.value = JoinRoomErrorState
-        }
-
-        override fun onComplete() {
-            // unused atm
-        }
-    }
-
-    inner class SetReminderObserver : Observer<Reminder> {
-        override fun onSubscribe(d: Disposable) {
-            disposableSet.add(d)
-        }
-
-        override fun onNext(reminder: Reminder) {
-            Log.d(TAG, "reminder set successfully")
-        }
-
-        override fun onError(e: Throwable) {
-            Log.e(TAG, "Error when sending reminder, $e")
-        }
-
-        override fun onComplete() {
-            // unused atm
-        }
-    }
-
-    inner class GetReminderObserver : Observer<Reminder> {
-        override fun onSubscribe(d: Disposable) {
-            disposableSet.add(d)
-        }
-
-        override fun onNext(reminder: Reminder) {
-            _getReminderExistState.value = GetReminderExistState(reminder)
-        }
-
-        override fun onError(e: Throwable) {
-            Log.d(TAG, "Error when getting reminder $e")
-            _getReminderExistState.value = GetReminderStartState
         }
 
         override fun onComplete() {
@@ -2568,43 +2710,37 @@ class ChatViewModel @AssistedInject constructor(
         }
     }
 
-    fun resendMessage(credentials: String, urlForChat: String, message: ChatMessage) {
+    fun resendMessage(message: ChatMessage) {
+        val referenceId = message.referenceId.orEmpty()
         viewModelScope.launch {
-            chatRepository.resendChatMessage(
-                credentials,
-                urlForChat,
-                message.message.orEmpty(),
-                message.actorDisplayName.orEmpty(),
-                message.parentMessageId?.toIntOrZero() ?: 0,
-                false,
-                message.referenceId.orEmpty()
-            ).collect { result ->
-                if (result.isSuccess) {
-                    Log.d(TAG, "resend successful")
-                } else {
-                    Log.e(TAG, "resend failed")
+            // PENDING without send work is never sent: both steps run even if this scope is cancelled.
+            withContext(NonCancellable) {
+                chatRepository.markMessageForResend(referenceId).collect { result ->
+                    if (result.isSuccess) {
+                        Log.d(TAG, "message marked pending for resend")
+                        SendMessageWorker.enqueue(
+                            internalConversationId = "${currentUser.id}@$chatRoomToken",
+                            referenceId = referenceId,
+                            threadTitle = null
+                        )
+                    } else {
+                        Log.e(TAG, "resend failed")
+                    }
                 }
             }
         }
     }
 
-    /**
-     * Resolves a link through the reference API of the server. Successful answers are kept for the lifetime
-     * of this conversation so scrolling does not resolve the same link over and over again.
-     */
-    suspend fun fetchReference(url: String): Reference? {
-        if (!this::currentUser.isInitialized) return null
-
-        return referenceCache[url] ?: withContext(Dispatchers.IO) {
+    suspend fun fetchOpenGraph(url: String): OpenGraphObjectDto? =
+        withContext(Dispatchers.IO) {
             runCatching {
                 chatNetworkDataSource.getOpenGraph(
                     currentUser.getCredentials(),
                     currentUser.baseUrl!!,
                     url
-                )
-            }.getOrNull()?.also { referenceCache[url] = it }
+                )?.openGraphObject
+            }.getOrNull()
         }
-    }
 
     suspend fun updateMessageDraft() {
         val model = conversationRepository.getLocallyStoredConversation(
@@ -2690,6 +2826,31 @@ class ChatViewModel @AssistedInject constructor(
 
     companion object {
         private val TAG = ChatViewModel::class.java.simpleName
+        private const val MILLIS_PER_SECOND = 1000L
+
+        /** Enough of the note to self to cover what a share of ours could have landed behind. */
+        private const val SHARE_LOOKUP_LIMIT = 20
+
+        /**
+         * Whether [messages] already hold the share that was sent with [referenceId], or null when the
+         * server returned no messages to judge by, because the lookup failed or answered "not modified".
+         */
+        @VisibleForTesting
+        fun holdsShare(messages: List<ChatMessageDto>?, referenceId: String): Boolean? =
+            messages?.any { it.referenceId == referenceId }
+
+        /**
+         * Ids of the messages a delete of [messageId] applies to: every already-uploaded message of the
+         * media group the message is shown in, or just the message itself.
+         */
+        internal fun messageIdsToDelete(items: List<ChatItem>, messageId: Int): List<Int> =
+            items
+                .filterIsInstance<ChatItem.MediaGroupItem>()
+                .firstOrNull { group -> group.messages.any { it.id == messageId } }
+                ?.messages
+                ?.filter { it.id == messageId || it.content !is MessageTypeContent.UploadingMedia }
+                ?.map { it.id }
+                ?: listOf(messageId)
 
         /**
          * Returns the read marker that makes [messageId] the first unread message: the id of the
@@ -2702,11 +2863,7 @@ class ChatViewModel @AssistedInject constructor(
          */
         internal fun readMarkerForMarkingUnread(items: List<ChatItem>, messageId: Int): Int? {
             val newestFirstIds = items.flatMap { item ->
-                when (item) {
-                    is ChatItem.MessageItem -> listOf(item.uiMessage.id)
-                    is ChatItem.MediaGroupItem -> item.messages.map { it.id }.asReversed()
-                    else -> emptyList()
-                }
+                item.messageIds().asReversed()
             }
 
             val selectedIndex = newestFirstIds.indexOf(messageId)
@@ -2756,7 +2913,7 @@ class ChatViewModel @AssistedInject constructor(
 
     sealed class OutOfOfficeUIState {
         data object None : OutOfOfficeUIState()
-        data class Success(val userAbsence: UserAbsenceData) : OutOfOfficeUIState()
+        data class Success(val userAbsence: UserAbsenceDataDto) : OutOfOfficeUIState()
         data class Error(val exception: Exception) : OutOfOfficeUIState()
     }
 
@@ -2768,13 +2925,13 @@ class ChatViewModel @AssistedInject constructor(
 
     sealed class ThreadRetrieveUiState {
         data object None : ThreadRetrieveUiState()
-        data class Success(val thread: ThreadInfo?) : ThreadRetrieveUiState()
+        data class Success(val thread: ThreadInfoDto?) : ThreadRetrieveUiState()
         data class Error(val exception: Exception) : ThreadRetrieveUiState()
     }
 
     sealed class UpcomingEventUIState {
         data object None : UpcomingEventUIState()
-        data class Success(val event: UpcomingEvent) : UpcomingEventUIState()
+        data class Success(val event: UpcomingEventDto) : UpcomingEventUIState()
         data class Error(val exception: Exception) : UpcomingEventUIState()
     }
 
@@ -2795,6 +2952,17 @@ class ChatViewModel @AssistedInject constructor(
                 is MediaGroupItem -> messages.lastOrNull()
                 else -> null
             }
+
+        /** Ids of all messages this item stands for, oldest first. */
+        fun messageIds(): List<Int> =
+            when (this) {
+                is MessageItem -> collapsedMessageIds + uiMessage.id
+                is MediaGroupItem -> messages.map { it.id }
+                else -> emptyList()
+            }
+
+        fun containsMessage(messageId: Int): Boolean = messageId in messageIds()
+
         fun dateOrNull(): LocalDate? =
             when (this) {
                 is DateHeaderItem -> date
@@ -2811,7 +2979,10 @@ class ChatViewModel @AssistedInject constructor(
                 is LoadGapItem -> "load_gap_$anchorMessageId"
             }
 
-        data class MessageItem(val uiMessage: ChatMessageUi) : ChatItem
+        // collapsedMessageIds: the older deleted messages of the same upload batch that are shown as
+        // this one message only (see CombinedUnit.Collapsed), oldest first.
+        data class MessageItem(val uiMessage: ChatMessageUi, val collapsedMessageIds: List<Int> = emptyList()) :
+            ChatItem
 
         // A run of consecutive single-file share messages from the same author - whether still
         // uploading or already synced - uploaded together in one batch (matching referenceId hash,
@@ -2827,6 +2998,6 @@ class ChatViewModel @AssistedInject constructor(
 
     @AssistedFactory
     interface ChatViewModelFactory {
-        fun build(roomToken: String, conversationThreadId: Long?): ChatViewModel
+        fun build(user: User, roomToken: String, conversationThreadId: Long?): ChatViewModel
     }
 }

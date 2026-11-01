@@ -16,7 +16,7 @@ import com.nextcloud.talk.R
 import com.nextcloud.talk.application.NextcloudTalkApplication.Companion.sharedApplication
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.models.RetrofitBucket
-import com.nextcloud.talk.models.json.capabilities.SpreedCapability
+import com.nextcloud.talk.models.json.capabilities.SpreedCapabilityDto
 import com.nextcloud.talk.utils.CapabilitiesUtil.hasSpreedFeatureCapability
 import okhttp3.Credentials.basic
 import java.net.URLEncoder
@@ -78,13 +78,6 @@ object ApiUtils {
         retrofitBucket.queryMap = queryMap
         return retrofitBucket
     }
-
-    fun getUrlForFilePreviewWithRemotePath(baseUrl: String, remotePath: String?, px: Int): String =
-        (
-            baseUrl + "/index.php/core/preview.png?file=" +
-                Uri.encode(remotePath, "UTF-8") +
-                "&x=" + px + "&y=" + px + "&a=1&mode=cover&forceIcon=1"
-            )
 
     fun getUrlForFilePreviewWithFileId(baseUrl: String, fileId: String, px: Int): String =
         (
@@ -190,7 +183,7 @@ object ApiUtils {
 
     @JvmStatic
     @Throws(NoSupportedApiException::class)
-    fun getChatApiVersion(spreedCapabilities: SpreedCapability, versions: IntArray): Int {
+    fun getChatApiVersion(spreedCapabilities: SpreedCapabilityDto, versions: IntArray): Int {
         for (version in versions) {
             if (version == API_V1 && hasSpreedFeatureCapability(spreedCapabilities, SpreedFeatures.CHAT_V2)) {
                 // Do not question that chat-v2 capability shows the availability of api/v1/ endpoint *see no evil*

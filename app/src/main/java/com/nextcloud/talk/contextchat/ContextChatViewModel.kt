@@ -13,8 +13,8 @@ import androidx.lifecycle.viewModelScope
 import autodagger.AutoInjector
 import com.nextcloud.talk.application.NextcloudTalkApplication
 import com.nextcloud.talk.chat.data.network.ChatNetworkDataSource
-import com.nextcloud.talk.models.json.chat.ChatMessageJson
-import com.nextcloud.talk.users.UserManager
+import com.nextcloud.talk.data.user.model.User
+import com.nextcloud.talk.models.json.chat.ChatMessageDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -24,9 +24,6 @@ import javax.inject.Inject
 class ContextChatViewModel @Inject constructor(private val chatNetworkDataSource: ChatNetworkDataSource) :
     ViewModel() {
 
-    @Inject
-    lateinit var userManager: UserManager
-
     var threadId: String? = null
 
     private val _getContextChatMessagesState =
@@ -34,17 +31,8 @@ class ContextChatViewModel @Inject constructor(private val chatNetworkDataSource
     val getContextChatMessagesState: StateFlow<ContextChatRetrieveUiState> = _getContextChatMessagesState
 
     @Suppress("LongParameterList")
-    fun getContextForChatMessages(
-        credentials: String,
-        baseUrl: String,
-        token: String,
-        threadId: String?,
-        messageId: String,
-        title: String
-    ) {
+    fun getContextForChatMessages(user: User, token: String, threadId: String?, messageId: String, title: String) {
         viewModelScope.launch {
-            val user = userManager.currentUser.blockingGet()
-
             if (!user.hasSpreedFeatureCapability("chat-get-context") ||
                 !user.hasSpreedFeatureCapability("federation-v1")
             ) {
@@ -53,8 +41,8 @@ class ContextChatViewModel @Inject constructor(private val chatNetworkDataSource
 
             try {
                 var messages = chatNetworkDataSource.getContextForChatMessage(
-                    credentials = credentials,
-                    baseUrl = baseUrl,
+                    credentials = user.getCredentials(),
+                    baseUrl = user.baseUrl!!,
                     token = token,
                     messageId = messageId,
                     limit = LIMIT,
@@ -85,7 +73,7 @@ class ContextChatViewModel @Inject constructor(private val chatNetworkDataSource
         }
     }
 
-    fun isThreadChildMessage(currentMessage: ChatMessageJson): Boolean =
+    fun isThreadChildMessage(currentMessage: ChatMessageDto): Boolean =
         currentMessage.hasThread &&
             currentMessage.threadId != currentMessage.id
 
@@ -94,7 +82,7 @@ class ContextChatViewModel @Inject constructor(private val chatNetworkDataSource
         data class Success(
             val messageId: String,
             val threadId: String?,
-            val messages: List<ChatMessageJson>,
+            val messages: List<ChatMessageDto>,
             val title: String?,
             val subTitle: String?
         ) : ContextChatRetrieveUiState()

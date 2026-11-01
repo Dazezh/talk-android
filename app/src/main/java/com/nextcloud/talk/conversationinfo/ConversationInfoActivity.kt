@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -43,11 +44,6 @@ import com.nextcloud.talk.utils.setExpeditedIfSupported
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import autodagger.AutoInjector
-import com.afollestad.materialdialogs.LayoutMode.WRAP_CONTENT
-import com.afollestad.materialdialogs.MaterialDialog
-import com.afollestad.materialdialogs.bottomsheets.BottomSheet
-import com.afollestad.materialdialogs.datetime.datePicker
-import com.afollestad.materialdialogs.datetime.timePicker
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.nextcloud.talk.R
 import com.nextcloud.talk.activities.BaseActivity
@@ -61,6 +57,7 @@ import com.nextcloud.talk.contacts.ContactsActivity
 import com.nextcloud.talk.conversationinfo.model.ParticipantModel
 import com.nextcloud.talk.conversationinfo.ui.ConversationInfoScreen
 import com.nextcloud.talk.conversationinfo.ui.ConversationInfoScreenCallbacks
+import com.nextcloud.talk.conversationinfo.ui.LobbyTimerPickerDialog
 import com.nextcloud.talk.conversationinfo.ui.ParticipantOpsAction
 import com.nextcloud.talk.conversationinfo.viewmodel.ConversationInfoViewModel
 import com.nextcloud.talk.conversationinfoedit.ConversationInfoEditActivity
@@ -73,14 +70,14 @@ import com.nextcloud.talk.extensions.loadUserAvatar
 import com.nextcloud.talk.jobs.AddParticipantsToConversationWorker
 import com.nextcloud.talk.jobs.DeleteConversationWorker
 import com.nextcloud.talk.jobs.LeaveConversationWorker
-import com.nextcloud.talk.models.json.autocomplete.AutocompleteUser
+import com.nextcloud.talk.models.json.autocomplete.AutocompleteUserDto
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
 import com.nextcloud.talk.models.json.converters.EnumActorTypeConverter
 import com.nextcloud.talk.models.json.generic.GenericOverall
-import com.nextcloud.talk.models.json.participants.Participant
-import com.nextcloud.talk.models.json.participants.Participant.ActorType.CIRCLES
-import com.nextcloud.talk.models.json.participants.Participant.ActorType.GROUPS
-import com.nextcloud.talk.models.json.upcomingEvents.UpcomingEvent
+import com.nextcloud.talk.models.json.participants.ParticipantDto
+import com.nextcloud.talk.models.json.participants.ParticipantDto.ActorType.CIRCLES
+import com.nextcloud.talk.models.json.participants.ParticipantDto.ActorType.GROUPS
+import com.nextcloud.talk.models.json.upcomingEvents.UpcomingEventDto
 import com.nextcloud.talk.passwordpolicy.PasswordPolicyField
 import com.nextcloud.talk.passwordpolicy.PasswordValidationState
 import com.nextcloud.talk.passwordpolicy.isPasswordAccepted
@@ -90,7 +87,6 @@ import com.nextcloud.talk.ui.dialog.DialogBanListFragment
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
 import com.nextcloud.talk.utils.ConversationUtils
-import com.nextcloud.talk.utils.DateConstants
 import com.nextcloud.talk.utils.DateUtils
 import com.nextcloud.talk.utils.ShareUtils
 import com.nextcloud.talk.utils.ShortcutManagerHelper
@@ -109,7 +105,6 @@ import retrofit2.HttpException
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import java.util.Calendar
 import javax.inject.Inject
 
 @AutoInjector(NextcloudTalkApplication::class)
@@ -128,18 +123,17 @@ class ConversationInfoActivity : BaseActivity() {
     lateinit var viewModel: ConversationInfoViewModel
 
     private lateinit var conversationToken: String
-    private var conversationUser: User? = null
+    private lateinit var conversationUser: User
     private lateinit var credentials: String
 
     private var startGroupChat: Boolean = false
 
     private val workerData: Data?
         get() {
-            val user = conversationUser ?: return null
             return if (conversationToken.isNotEmpty()) {
                 Data.Builder()
                     .putString(KEY_ROOM_TOKEN, conversationToken)
-                    .putLong(BundleKeys.KEY_INTERNAL_USER_ID, user.id!!)
+                    .putLong(BundleKeys.KEY_INTERNAL_USER_ID, conversationUser.id!!)
                     .build()
             } else {
                 null
@@ -151,12 +145,11 @@ class ConversationInfoActivity : BaseActivity() {
     ) { result ->
         executeIfResultOk(result) { intent ->
             val selectedAutocompleteUsers =
-                intent?.getParcelableArrayListExtraProvider<AutocompleteUser>("selectedParticipants")
+                intent?.getParcelableArrayListExtraProvider<AutocompleteUserDto>("selectedParticipants")
                     ?: emptyList()
-            val user = conversationUser ?: return@executeIfResultOk
             if (startGroupChat) {
                 viewModel.createRoomFromOneToOne(
-                    user,
+                    conversationUser,
                     viewModel.uiState.value.participants.map { it.participant },
                     selectedAutocompleteUsers,
                     conversationToken
@@ -171,19 +164,20 @@ class ConversationInfoActivity : BaseActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            conversationUser?.let { viewModel.getRoom(it, conversationToken) }
+            viewModel.getRoom(conversationUser, conversationToken)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NextcloudTalkApplication.sharedApplication!!.componentApplication.inject(this)
+        conversationUser = setUpBoundUserOrFinish() ?: return
 
         conversationToken = requireNotNull(
             intent.getStringExtra(KEY_ROOM_TOKEN)
         ) { "Missing room token" }
 
-        val upcomingEvent = intent.getParcelableExtraProvider<UpcomingEvent>(BundleKeys.KEY_UPCOMING_EVENT)
+        val upcomingEvent = intent.getParcelableExtraProvider<UpcomingEventDto>(BundleKeys.KEY_UPCOMING_EVENT)
         val upcomingEventSummary = upcomingEvent?.summary
         val upcomingEventTime = upcomingEvent?.start?.let { start ->
             val startDateTime = Instant.ofEpochSecond(start).atZone(ZoneId.systemDefault())
@@ -193,20 +187,10 @@ class ConversationInfoActivity : BaseActivity() {
 
         viewModel = ViewModelProvider(this, viewModelFactory)[ConversationInfoViewModel::class.java]
 
-        lifecycleScope.launch {
-            currentUserProvider.getCurrentUser()
-                .onSuccess { user ->
-                    conversationUser = user
-                    credentials = ApiUtils.getCredentials(user.username, user.token)!!
-                    viewModel.getRoom(user, conversationToken)
-                    if (upcomingEventSummary != null || upcomingEventTime != null) {
-                        viewModel.setUpcomingEvent(upcomingEventSummary, upcomingEventTime)
-                    }
-                }
-                .onFailure {
-                    Log.e(TAG, "Failed to get current user")
-                    finish()
-                }
+        credentials = ApiUtils.getCredentials(conversationUser.username, conversationUser.token)!!
+        viewModel.getRoom(conversationUser, conversationToken)
+        if (upcomingEventSummary != null || upcomingEventTime != null) {
+            viewModel.setUpcomingEvent(upcomingEventSummary, upcomingEventTime)
         }
 
         setupCompose()
@@ -224,7 +208,7 @@ class ConversationInfoActivity : BaseActivity() {
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     fun onMessageEvent(eventStatus: EventStatus) {
-        conversationUser?.let { viewModel.loadParticipants(it, conversationToken) }
+        viewModel.loadParticipants(conversationUser, conversationToken)
     }
 
     private fun setupCompose() {
@@ -235,7 +219,6 @@ class ConversationInfoActivity : BaseActivity() {
 
             LaunchedEffect(Unit) {
                 viewModel.uiEvent.collect { event ->
-                    val user = conversationUser ?: return@collect
                     when (event) {
                         is ConversationInfoUiEvent.ShowSnackbar ->
                             snackbarHostState.showSnackbar(getString(event.resId))
@@ -243,25 +226,34 @@ class ConversationInfoActivity : BaseActivity() {
                             snackbarHostState.showSnackbar(event.text)
                         is ConversationInfoUiEvent.NavigateToChat -> {
                             startActivity(
-                                Intent(this@ConversationInfoActivity, ChatActivity::class.java).apply {
-                                    putExtra(KEY_ROOM_TOKEN, event.token)
-                                }
+                                ChatActivity.createIntent(
+                                    this@ConversationInfoActivity,
+                                    conversationUser.id!!,
+                                    event.token
+                                )
                             )
                         }
                         ConversationInfoUiEvent.RefreshParticipants ->
-                            viewModel.loadParticipants(user, conversationToken)
+                            viewModel.loadParticipants(conversationUser, conversationToken)
                     }
                 }
             }
 
             var passwordRequest by remember { mutableStateOf<PasswordRequest?>(null) }
+            var showLobbyTimerPicker by rememberSaveable { mutableStateOf(false) }
 
             MaterialTheme(colorScheme = colorScheme) {
                 ColoredStatusBar()
                 ConversationInfoScreen(
                     state = uiState,
-                    callbacks = buildCallbacks(onPasswordRequest = { passwordRequest = it })
+                    callbacks = buildCallbacks(
+                        onPasswordRequest = { passwordRequest = it },
+                        onLobbyTimerRequest = { showLobbyTimerPicker = true }
+                    )
                 )
+                if (showLobbyTimerPicker) {
+                    LobbyTimerPicker(uiState.conversation?.lobbyTimer ?: 0L) { showLobbyTimerPicker = false }
+                }
                 passwordRequest?.let { request ->
                     val validationState by viewModel.passwordValidation.state.collectAsStateWithLifecycle()
                     GuestAccessPasswordDialog(
@@ -282,21 +274,39 @@ class ConversationInfoActivity : BaseActivity() {
         }
     }
 
+    @Composable
+    private fun LobbyTimerPicker(initialEpochSeconds: Long, onClose: () -> Unit) {
+        LobbyTimerPickerDialog(
+            initialEpochSeconds = initialEpochSeconds,
+            onConfirm = { seconds ->
+                onClose()
+                viewModel.setLobbyTimerAndSubmit(conversationUser, conversationToken, seconds)
+            },
+            onClear = {
+                onClose()
+                viewModel.setLobbyTimerAndSubmit(conversationUser, conversationToken, 0L)
+            },
+            onDismiss = onClose
+        )
+    }
+
     private fun onGuestPasswordSave(request: PasswordRequest, password: String, copyAfterSave: Boolean) {
-        val user = conversationUser ?: return
         if (copyAfterSave) {
             copyPassword(password)
         }
         when (request) {
             PasswordRequest.SET -> {
-                val apiVersion = ApiUtils.getConversationApiVersion(user, intArrayOf(ApiUtils.API_V4, ApiUtils.API_V1))
+                val apiVersion = ApiUtils.getConversationApiVersion(
+                    conversationUser,
+                    intArrayOf(ApiUtils.API_V4, ApiUtils.API_V1)
+                )
                 viewModel.setPassword(
-                    user = user,
-                    url = ApiUtils.getUrlForRoomPassword(apiVersion, user.baseUrl!!, conversationToken),
+                    user = conversationUser,
+                    url = ApiUtils.getUrlForRoomPassword(apiVersion, conversationUser.baseUrl!!, conversationToken),
                     password = password
                 )
             }
-            PasswordRequest.ALLOW_GUESTS -> viewModel.allowGuests(user, conversationToken, true, password)
+            PasswordRequest.ALLOW_GUESTS -> viewModel.allowGuests(conversationUser, conversationToken, true, password)
         }
     }
 
@@ -316,12 +326,13 @@ class ConversationInfoActivity : BaseActivity() {
     }
 
     @Suppress("LongMethod", "CyclomaticComplexMethod")
-    private fun buildCallbacks(onPasswordRequest: (PasswordRequest) -> Unit) =
+    private fun buildCallbacks(onPasswordRequest: (PasswordRequest) -> Unit, onLobbyTimerRequest: () -> Unit) =
         ConversationInfoScreenCallbacks(
             onNavigateBack = { onBackPressedDispatcher.onBackPressed() },
             onEditConversation = {
                 editConversationResult.launch(
                     Intent(this, ConversationInfoEditActivity::class.java).apply {
+                        putExtra(BundleKeys.KEY_INTERNAL_USER_ID, conversationUser.id)
                         putExtra(KEY_ROOM_TOKEN, conversationToken)
                     }
                 )
@@ -329,60 +340,58 @@ class ConversationInfoActivity : BaseActivity() {
             onMessageNotificationLevelClick = { showNotificationLevelDialog() },
             onCallNotificationsClick = { viewModel.toggleCallNotifications() },
             onImportantConversationClick = {
-                val user = conversationUser ?: return@ConversationInfoScreenCallbacks
-                viewModel.toggleImportantConversation(credentials, user.baseUrl!!, conversationToken)
+                viewModel.toggleImportantConversation(credentials, conversationUser.baseUrl!!, conversationToken)
             },
             onSensitiveConversationClick = {
-                val user = conversationUser ?: return@ConversationInfoScreenCallbacks
-                viewModel.toggleSensitiveConversation(credentials, user.baseUrl!!, conversationToken)
+                viewModel.toggleSensitiveConversation(credentials, conversationUser.baseUrl!!, conversationToken)
             },
-            onLobbyClick = { conversationUser?.let { viewModel.toggleLobby(it, conversationToken) } },
-            onLobbyTimerClick = { showLobbyTimerDialog() },
+            onLobbyClick = { viewModel.toggleLobby(conversationUser, conversationToken) },
+            onLobbyTimerClick = onLobbyTimerRequest,
             onAllowGuestsClick = {
-                val user = conversationUser ?: return@ConversationInfoScreenCallbacks
                 val state = viewModel.uiState.value
                 val allow = !state.guestsAllowed
                 if (allow && isPasswordEnforced() && !state.hasPassword) {
                     onPasswordRequest(PasswordRequest.ALLOW_GUESTS)
                 } else {
-                    viewModel.allowGuests(user, conversationToken, allow)
+                    viewModel.allowGuests(conversationUser, conversationToken, allow)
                 }
             },
             onPasswordProtectionClick = {
-                val user = conversationUser ?: return@ConversationInfoScreenCallbacks
                 if (!viewModel.uiState.value.hasPassword) {
                     onPasswordRequest(PasswordRequest.SET)
                 } else {
                     val apiVersion =
-                        ApiUtils.getConversationApiVersion(user, intArrayOf(ApiUtils.API_V4, ApiUtils.API_V1))
+                        ApiUtils.getConversationApiVersion(
+                            conversationUser,
+                            intArrayOf(ApiUtils.API_V4, ApiUtils.API_V1)
+                        )
                     viewModel.setPassword(
-                        user = user,
-                        url = ApiUtils.getUrlForRoomPassword(apiVersion, user.baseUrl!!, conversationToken),
+                        user = conversationUser,
+                        url = ApiUtils.getUrlForRoomPassword(apiVersion, conversationUser.baseUrl!!, conversationToken),
                         password = ""
                     )
                 }
             },
             onResendInvitationsClick = {
-                conversationUser?.let { viewModel.resendInvitations(it, conversationToken) }
+                viewModel.resendInvitations(conversationUser, conversationToken)
             },
             onSharedItemsClick = { showSharedItems() },
             onThreadsClick = { openThreadsOverview() },
             onRecordingConsentClick = {
-                conversationUser?.let { viewModel.toggleRecordingConsent(it, conversationToken) }
+                viewModel.toggleRecordingConsent(conversationUser, conversationToken)
             },
             onMessageExpirationClick = { showMessageExpirationDialog() },
             onShareConversationClick = {
-                val user = conversationUser ?: return@ConversationInfoScreenCallbacks
                 val state = viewModel.uiState.value
                 ShareUtils.shareConversationLink(
                     this,
-                    user.baseUrl,
+                    conversationUser.baseUrl,
                     state.conversationToken,
-                    CapabilitiesUtil.canGeneratePrettyURL(user)
+                    CapabilitiesUtil.canGeneratePrettyURL(conversationUser)
                 )
             },
             onLockConversationClick = {
-                conversationUser?.let { viewModel.toggleLock(it, conversationToken) }
+                viewModel.toggleLock(conversationUser, conversationToken)
             },
             onParticipantClick = { model -> handleParticipantClick(model) },
             onParticipantOpsDismiss = { viewModel.setParticipantForOps(null) },
@@ -396,7 +405,7 @@ class ConversationInfoActivity : BaseActivity() {
                 selectParticipantsToAdd()
             },
             onListBansClick = { listBans() },
-            onArchiveClick = { conversationUser?.let { viewModel.toggleArchive(it, conversationToken) } },
+            onArchiveClick = { viewModel.toggleArchive(conversationUser, conversationToken) },
             onLeaveConversationClick = { leaveConversation() },
             onClearHistoryClick = { showClearHistoryDialog() },
             onDeleteConversationClick = { showDeleteConversationDialog() }
@@ -406,6 +415,7 @@ class ConversationInfoActivity : BaseActivity() {
         val conv = viewModel.uiState.value.conversation ?: return
         startActivity(
             Intent(this, SharedItemsActivity::class.java).apply {
+                putExtra(BundleKeys.KEY_INTERNAL_USER_ID, conversationUser.id)
                 putExtra(BundleKeys.KEY_CONVERSATION_NAME, conv.displayName)
                 putExtra(KEY_ROOM_TOKEN, conversationToken)
                 putExtra(
@@ -421,57 +431,19 @@ class ConversationInfoActivity : BaseActivity() {
     }
 
     fun openThreadsOverview() {
-        val user = conversationUser ?: return
         val threadsUrl = ApiUtils.getUrlForRecentThreads(
             version = 1,
-            baseUrl = user.baseUrl,
+            baseUrl = conversationUser.baseUrl,
             token = conversationToken
         )
         startActivity(
             Intent(context, ThreadsOverviewActivity::class.java).apply {
+                putExtra(BundleKeys.KEY_INTERNAL_USER_ID, conversationUser.id)
                 putExtra(KEY_ROOM_TOKEN, conversationToken)
                 putExtra(ThreadsOverviewActivity.KEY_APPBAR_TITLE, getString(R.string.recent_threads))
                 putExtra(ThreadsOverviewActivity.KEY_THREADS_SOURCE_URL, threadsUrl)
             }
         )
-    }
-
-    private fun showLobbyTimerDialog() {
-        val user = conversationUser ?: return
-        val currentLobbyTimer = viewModel.uiState.value.conversation?.lobbyTimer ?: 0L
-        MaterialDialog(this, BottomSheet(WRAP_CONTENT)).show {
-            val cal = Calendar.getInstance()
-            if (currentLobbyTimer != 0L) cal.timeInMillis = currentLobbyTimer * DateConstants.SECOND_DIVIDER
-            datePicker { _, date ->
-                showTimePicker(date) { selectedDate ->
-                    viewModel.setLobbyTimerAndSubmit(
-                        user,
-                        conversationToken,
-                        selectedDate.timeInMillis / DateConstants.SECOND_DIVIDER
-                    )
-                }
-            }
-        }
-    }
-
-    private fun showTimePicker(selectedDate: Calendar, onTimeSelected: (Calendar) -> Unit) {
-        val currentTime = Calendar.getInstance()
-        MaterialDialog(this, BottomSheet(WRAP_CONTENT)).show {
-            cancelable(false)
-            timePicker(
-                currentTime = Calendar.getInstance(),
-                show24HoursView = true,
-                timeCallback = { _, time ->
-                    selectedDate.set(Calendar.HOUR_OF_DAY, time.get(Calendar.HOUR_OF_DAY))
-                    selectedDate.set(Calendar.MINUTE, time.get(Calendar.MINUTE))
-                    if (selectedDate.timeInMillis < currentTime.timeInMillis) {
-                        selectedDate.set(Calendar.HOUR_OF_DAY, currentTime.get(Calendar.HOUR_OF_DAY))
-                        selectedDate.set(Calendar.MINUTE, currentTime.get(Calendar.MINUTE))
-                    }
-                    onTimeSelected(selectedDate)
-                }
-            )
-        }
     }
 
     private fun showNotificationLevelDialog() {
@@ -514,7 +486,7 @@ class ConversationInfoActivity : BaseActivity() {
     private fun listBans() {
         val transaction = supportFragmentManager.beginTransaction()
         transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
-        transaction.add(android.R.id.content, DialogBanListFragment(conversationToken))
+        transaction.add(android.R.id.content, DialogBanListFragment.newInstance(conversationToken, conversationUser))
             .addToBackStack(null)
             .commit()
     }
@@ -528,10 +500,10 @@ class ConversationInfoActivity : BaseActivity() {
     }
 
     private fun selectParticipantsToAdd() {
-        val existingParticipants = ArrayList<AutocompleteUser>()
+        val existingParticipants = ArrayList<AutocompleteUserDto>()
         for (model in viewModel.uiState.value.participants) {
             existingParticipants.add(
-                AutocompleteUser(
+                AutocompleteUserDto(
                     model.participant.calculatedActorId!!,
                     model.participant.displayName,
                     model.participant.calculatedActorType.name.lowercase()
@@ -540,6 +512,7 @@ class ConversationInfoActivity : BaseActivity() {
         }
         addParticipantsResult.launch(
             Intent(this, ContactsActivity::class.java).apply {
+                putExtra(BundleKeys.KEY_INTERNAL_USER_ID, conversationUser.id)
                 putExtra(BundleKeys.KEY_ADD_PARTICIPANTS, true)
                 putParcelableArrayListExtra("selectedParticipants", existingParticipants)
                 putExtra(KEY_HIDE_ALREADY_EXISTING_PARTICIPANTS, true)
@@ -549,8 +522,7 @@ class ConversationInfoActivity : BaseActivity() {
         )
     }
 
-    private fun addParticipantsToConversation(autocompleteUsers: List<AutocompleteUser>) {
-        val user = conversationUser ?: return
+    private fun addParticipantsToConversation(autocompleteUsers: List<AutocompleteUserDto>) {
         val groupIds = mutableSetOf<String>()
         val emailIds = mutableSetOf<String>()
         val circleIds = mutableSetOf<String>()
@@ -559,14 +531,14 @@ class ConversationInfoActivity : BaseActivity() {
         autocompleteUsers.forEach { participant ->
             when (participant.source) {
                 GROUPS.name.lowercase() -> groupIds.add(participant.id!!)
-                Participant.ActorType.EMAILS.name.lowercase() -> emailIds.add(participant.id!!)
+                ParticipantDto.ActorType.EMAILS.name.lowercase() -> emailIds.add(participant.id!!)
                 CIRCLES.name.lowercase() -> circleIds.add(participant.id!!)
                 else -> userIds.add(participant.id!!)
             }
         }
 
         val data = Data.Builder()
-            .putLong(BundleKeys.KEY_INTERNAL_USER_ID, user.id!!)
+            .putLong(BundleKeys.KEY_INTERNAL_USER_ID, conversationUser.id!!)
             .putString(BundleKeys.KEY_TOKEN, conversationToken)
             .putStringArray(BundleKeys.KEY_SELECTED_USERS, userIds.toTypedArray())
             .putStringArray(BundleKeys.KEY_SELECTED_GROUPS, groupIds.toTypedArray())
@@ -585,7 +557,7 @@ class ConversationInfoActivity : BaseActivity() {
             .observe(this) { workInfo: WorkInfo? ->
                 when (workInfo?.state) {
                     WorkInfo.State.SUCCEEDED -> {
-                        viewModel.loadParticipants(user, conversationToken)
+                        viewModel.loadParticipants(conversationUser, conversationToken)
                         reportParticipantsNotAdded(workInfo.outputData, names)
                     }
                     WorkInfo.State.FAILED -> reportParticipantsNotAdded(workInfo.outputData, names)
@@ -625,7 +597,7 @@ class ConversationInfoActivity : BaseActivity() {
                     if (workInfo != null) {
                         when (workInfo.state) {
                             WorkInfo.State.SUCCEEDED -> {
-                                conversationUser?.id?.let { userId ->
+                                conversationUser.id?.let { userId ->
                                     ShortcutManagerHelper.disableConversationShortcut(
                                         context,
                                         conversationToken,
@@ -678,10 +650,12 @@ class ConversationInfoActivity : BaseActivity() {
     }
 
     private fun clearHistory() {
-        val user = conversationUser ?: return
         val caps = viewModel.uiState.value.spreedCapabilities ?: return
         val apiVersion = ApiUtils.getChatApiVersion(caps, intArrayOf(1))
-        viewModel.clearChatHistory(user, ApiUtils.getUrlForChat(apiVersion, user.baseUrl!!, conversationToken))
+        viewModel.clearChatHistory(
+            conversationUser,
+            ApiUtils.getUrlForChat(apiVersion, conversationUser.baseUrl!!, conversationToken)
+        )
     }
 
     private fun deleteConversation() {
@@ -693,7 +667,7 @@ class ConversationInfoActivity : BaseActivity() {
                     .build()
             )
 
-            conversationUser?.id?.let { userId ->
+            conversationUser.id?.let { userId ->
                 ShortcutManagerHelper.disableConversationShortcut(
                     context,
                     conversationToken,
@@ -708,43 +682,41 @@ class ConversationInfoActivity : BaseActivity() {
         }
     }
 
-    private fun toggleModeratorStatus(apiVersion: Int, participant: Participant) {
-        val user = conversationUser ?: return
+    private fun toggleModeratorStatus(apiVersion: Int, participant: ParticipantDto) {
         val subscriber = participantActionObserver()
-        if (participant.type == Participant.ParticipantType.MODERATOR ||
-            participant.type == Participant.ParticipantType.GUEST_MODERATOR
+        if (participant.type == ParticipantDto.ParticipantType.MODERATOR ||
+            participant.type == ParticipantDto.ParticipantType.GUEST_MODERATOR
         ) {
             ncApi.demoteAttendeeFromModerator(
                 credentials,
-                ApiUtils.getUrlForRoomModerators(apiVersion, user.baseUrl!!, conversationToken),
+                ApiUtils.getUrlForRoomModerators(apiVersion, conversationUser.baseUrl!!, conversationToken),
                 participant.attendeeId,
                 null
             )?.subscribeOn(Schedulers.io())?.observeOn(AndroidSchedulers.mainThread())?.subscribe(subscriber)
-        } else if (participant.type == Participant.ParticipantType.USER ||
-            participant.type == Participant.ParticipantType.GUEST
+        } else if (participant.type == ParticipantDto.ParticipantType.USER ||
+            participant.type == ParticipantDto.ParticipantType.GUEST
         ) {
             ncApi.promoteAttendeeToModerator(
                 credentials,
-                ApiUtils.getUrlForRoomModerators(apiVersion, user.baseUrl!!, conversationToken),
+                ApiUtils.getUrlForRoomModerators(apiVersion, conversationUser.baseUrl!!, conversationToken),
                 participant.attendeeId,
                 null
             )?.subscribeOn(Schedulers.io())?.observeOn(AndroidSchedulers.mainThread())?.subscribe(subscriber)
         }
     }
 
-    private fun toggleModeratorStatusLegacy(apiVersion: Int, participant: Participant) {
-        val user = conversationUser ?: return
+    private fun toggleModeratorStatusLegacy(apiVersion: Int, participant: ParticipantDto) {
         val subscriber = participantActionObserver()
-        if (participant.type == Participant.ParticipantType.MODERATOR) {
+        if (participant.type == ParticipantDto.ParticipantType.MODERATOR) {
             ncApi.demoteModeratorToUser(
                 credentials,
-                ApiUtils.getUrlForRoomModerators(apiVersion, user.baseUrl!!, conversationToken),
+                ApiUtils.getUrlForRoomModerators(apiVersion, conversationUser.baseUrl!!, conversationToken),
                 participant.userId
             )?.subscribeOn(Schedulers.io())?.observeOn(AndroidSchedulers.mainThread())?.subscribe(subscriber)
-        } else if (participant.type == Participant.ParticipantType.USER) {
+        } else if (participant.type == ParticipantDto.ParticipantType.USER) {
             ncApi.promoteUserToModerator(
                 credentials,
-                ApiUtils.getUrlForRoomModerators(apiVersion, user.baseUrl!!, conversationToken),
+                ApiUtils.getUrlForRoomModerators(apiVersion, conversationUser.baseUrl!!, conversationToken),
                 participant.userId
             )?.subscribeOn(Schedulers.io())?.observeOn(AndroidSchedulers.mainThread())?.subscribe(subscriber)
         }
@@ -754,7 +726,7 @@ class ConversationInfoActivity : BaseActivity() {
         object : Observer<GenericOverall> {
             override fun onSubscribe(d: Disposable) { /* unused */ }
             override fun onNext(genericOverall: GenericOverall) {
-                conversationUser?.let { viewModel.loadParticipants(it, conversationToken) }
+                viewModel.loadParticipants(conversationUser, conversationToken)
             }
 
             @SuppressLint("LongLogTag")
@@ -765,28 +737,35 @@ class ConversationInfoActivity : BaseActivity() {
             override fun onComplete() { /* unused */ }
         }
 
-    private fun removeAttendeeFromConversation(apiVersion: Int, participant: Participant) {
-        val user = conversationUser ?: return
+    private fun removeAttendeeFromConversation(apiVersion: Int, participant: ParticipantDto) {
         val observer = participantActionObserver()
         if (apiVersion >= ApiUtils.API_V4) {
             ncApi.removeAttendeeFromConversation(
                 credentials,
-                ApiUtils.getUrlForAttendees(apiVersion, user.baseUrl!!, conversationToken),
+                ApiUtils.getUrlForAttendees(apiVersion, conversationUser.baseUrl!!, conversationToken),
                 participant.attendeeId
             )?.subscribeOn(Schedulers.io())?.observeOn(AndroidSchedulers.mainThread())?.subscribe(observer)
         } else {
-            if (participant.type == Participant.ParticipantType.GUEST ||
-                participant.type == Participant.ParticipantType.USER_FOLLOWING_LINK
+            if (participant.type == ParticipantDto.ParticipantType.GUEST ||
+                participant.type == ParticipantDto.ParticipantType.USER_FOLLOWING_LINK
             ) {
                 ncApi.removeParticipantFromConversation(
                     credentials,
-                    ApiUtils.getUrlForRemovingParticipantFromConversation(user.baseUrl!!, conversationToken, true),
+                    ApiUtils.getUrlForRemovingParticipantFromConversation(
+                        conversationUser.baseUrl!!,
+                        conversationToken,
+                        true
+                    ),
                     participant.sessionId
                 )?.subscribeOn(Schedulers.io())?.observeOn(AndroidSchedulers.mainThread())?.subscribe(observer)
             } else {
                 ncApi.removeParticipantFromConversation(
                     credentials,
-                    ApiUtils.getUrlForRemovingParticipantFromConversation(user.baseUrl!!, conversationToken, false),
+                    ApiUtils.getUrlForRemovingParticipantFromConversation(
+                        conversationUser.baseUrl!!,
+                        conversationToken,
+                        false
+                    ),
                     participant.userId
                 )?.subscribeOn(Schedulers.io())?.observeOn(AndroidSchedulers.mainThread())?.subscribe(observer)
             }
@@ -794,7 +773,7 @@ class ConversationInfoActivity : BaseActivity() {
     }
 
     private fun banActor(actorType: String, actorId: String, internalNote: String) {
-        conversationUser?.let { viewModel.banActor(it, conversationToken, actorType, actorId, internalNote) }
+        viewModel.banActor(conversationUser, conversationToken, actorType, actorId, internalNote)
     }
 
     private fun handleParticipantClick(model: ParticipantModel) {
@@ -807,9 +786,8 @@ class ConversationInfoActivity : BaseActivity() {
         val conv = state.conversation ?: return
         val caps = state.spreedCapabilities ?: return
         if (!ConversationUtils.canModerate(conv, caps)) return
-        val user = conversationUser ?: return
         val participant = model.participant
-        val apiVersion = ApiUtils.getConversationApiVersion(user, intArrayOf(ApiUtils.API_V4, 1))
+        val apiVersion = ApiUtils.getConversationApiVersion(conversationUser, intArrayOf(ApiUtils.API_V4, 1))
         when (action) {
             ParticipantOpsAction.PromoteToModerator,
             ParticipantOpsAction.DemoteFromModerator ->
@@ -862,12 +840,11 @@ class ConversationInfoActivity : BaseActivity() {
 
     private fun changeParticipantType(
         apiVersion: Int,
-        participant: Participant,
+        participant: ParticipantDto,
         promote: Boolean,
         participantType: Int
     ) {
-        val user = conversationUser ?: return
-        val url = ApiUtils.getUrlForRoomModerators(apiVersion, user.baseUrl!!, conversationToken)
+        val url = ApiUtils.getUrlForRoomModerators(apiVersion, conversationUser.baseUrl!!, conversationToken)
         val call = if (promote) {
             ncApi.promoteAttendeeToModerator(credentials, url, participant.attendeeId, participantType)
         } else {
@@ -878,13 +855,12 @@ class ConversationInfoActivity : BaseActivity() {
             ?.subscribe(participantActionObserver())
     }
 
-    private fun handleBan(participant: Participant) {
-        val user = conversationUser ?: return
-        val apiVersion = ApiUtils.getConversationApiVersion(user, intArrayOf(ApiUtils.API_V4, 1))
+    private fun handleBan(participant: ParticipantDto) {
+        val apiVersion = ApiUtils.getConversationApiVersion(conversationUser, intArrayOf(ApiUtils.API_V4, 1))
         val dialogBinding = DialogBanParticipantBinding.inflate(layoutInflater)
         val dialog = MaterialAlertDialogBuilder(this).setView(dialogBinding.root).create()
         dialogBinding.avatarImage.loadUserAvatar(
-            user,
+            conversationUser,
             participant.actorId!!,
             requestBigSize = true,
             ignoreCache = false

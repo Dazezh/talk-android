@@ -8,8 +8,8 @@ package com.nextcloud.talk.chat.ui.model
 
 import com.nextcloud.talk.chat.data.model.ChatMessage
 import com.nextcloud.talk.data.user.model.User
-import com.nextcloud.talk.models.json.capabilities.Capabilities
-import com.nextcloud.talk.models.json.capabilities.CoreCapability
+import com.nextcloud.talk.models.json.capabilities.CapabilitiesDto
+import com.nextcloud.talk.models.json.capabilities.CoreCapabilityDto
 import com.nextcloud.talk.models.json.capabilities.RStikerCapability
 import com.nextcloud.talk.models.json.capabilities.StickersCapability
 import org.junit.Assert.assertEquals
@@ -63,8 +63,8 @@ class StickerMessageContentTest {
             username = "alice",
             baseUrl = "https://cloud.example.com",
             token = "token",
-            capabilities = Capabilities(
-                coreCapability = CoreCapability(null, null, "true", null, null),
+            capabilities = CapabilitiesDto(
+                coreCapability = CoreCapabilityDto(null, null, "true", null, null),
                 spreedCapability = null,
                 notificationsCapability = null,
                 themingCapability = null,

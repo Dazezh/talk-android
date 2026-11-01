@@ -10,10 +10,10 @@ package com.nextcloud.talk.webrtc;
 import android.util.Log;
 
 import com.bluelinelabs.logansquare.LoganSquare;
-import com.nextcloud.talk.models.json.signaling.DataChannelMessage;
-import com.nextcloud.talk.models.json.signaling.NCIceCandidate;
-import com.nextcloud.talk.models.json.signaling.NCMessagePayload;
-import com.nextcloud.talk.models.json.signaling.NCSignalingMessage;
+import com.nextcloud.talk.models.json.signaling.DataChannelMessageDto;
+import com.nextcloud.talk.models.json.signaling.NCIceCandidateDto;
+import com.nextcloud.talk.models.json.signaling.NCMessagePayloadDto;
+import com.nextcloud.talk.models.json.signaling.NCSignalingMessageDto;
 import com.nextcloud.talk.signaling.SignalingMessageReceiver;
 import com.nextcloud.talk.signaling.SignalingMessageSender;
 
@@ -35,6 +35,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,7 +60,7 @@ public class PeerConnectionWrapper {
     private String sessionId;
     private final MediaConstraints mediaConstraints;
     private final Map<String, DataChannel> dataChannels = new HashMap<>();
-    private final List<DataChannelMessage> pendingDataChannelMessages = new ArrayList<>();
+    private final List<DataChannelMessageDto> pendingDataChannelMessages = new ArrayList<>();
     private final SdpObserver sdpObserver;
 
     private final boolean isMCUPublisher;
@@ -67,6 +68,8 @@ public class PeerConnectionWrapper {
 
     // It is assumed that there will be at most one remote stream at each time.
     private MediaStream stream;
+    private volatile boolean remoteAudioPlayoutEnabled = false;
+    private final Map<String, AudioTrack> remoteAudioTracks = new HashMap<>();
 
     /**
      * Listener for data channel messages.
@@ -154,7 +157,7 @@ public class PeerConnectionWrapper {
                     // offer; offers should be requested only for videos.
                     // "to" property is not actually needed in the "requestoffer" signaling message, but it is used to
                     // set the recipient session ID in the assembled call message.
-                    NCSignalingMessage ncSignalingMessage = createBaseSignalingMessage("requestoffer");
+                    NCSignalingMessageDto ncSignalingMessage = createBaseSignalingMessage("requestoffer");
                     signalingMessageSender.send(ncSignalingMessage);
                 } else if (!hasMCU && hasInitiated && "video".equals(this.videoStreamType)) {
                     // If the connection type is "screen" the client sharing the screen will send an
@@ -190,11 +193,11 @@ public class PeerConnectionWrapper {
     }
 
     public void raiseHand(Boolean raise) {
-        NCMessagePayload ncMessagePayload = new NCMessagePayload();
+        NCMessagePayloadDto ncMessagePayload = new NCMessagePayloadDto();
         ncMessagePayload.setState(raise);
         ncMessagePayload.setTimestamp(System.currentTimeMillis());
 
-        NCSignalingMessage ncSignalingMessage = new NCSignalingMessage();
+        NCSignalingMessageDto ncSignalingMessage = new NCSignalingMessageDto();
         ncSignalingMessage.setTo(sessionId);
         ncSignalingMessage.setType("raiseHand");
         ncSignalingMessage.setPayload(ncMessagePayload);
@@ -204,11 +207,11 @@ public class PeerConnectionWrapper {
     }
 
     public void sendReaction(String emoji) {
-        NCMessagePayload ncMessagePayload = new NCMessagePayload();
+        NCMessagePayloadDto ncMessagePayload = new NCMessagePayloadDto();
         ncMessagePayload.setReaction(emoji);
         ncMessagePayload.setTimestamp(System.currentTimeMillis());
 
-        NCSignalingMessage ncSignalingMessage = new NCSignalingMessage();
+        NCSignalingMessageDto ncSignalingMessage = new NCSignalingMessageDto();
         ncSignalingMessage.setTo(sessionId);
         ncSignalingMessage.setType("reaction");
         ncSignalingMessage.setPayload(ncMessagePayload);
@@ -255,6 +258,51 @@ public class PeerConnectionWrapper {
         return stream;
     }
 
+    public synchronized void setRemoteAudioPlayoutEnabled(boolean enabled) {
+        remoteAudioPlayoutEnabled = enabled;
+        double volume = enabled ? 1.0 : 0.0;
+        Iterator<Map.Entry<String, AudioTrack>> iterator = remoteAudioTracks.entrySet().iterator();
+        while (iterator.hasNext()) {
+            try {
+                iterator.next().getValue().setVolume(volume);
+            } catch (IllegalStateException exception) {
+                iterator.remove();
+                Log.w(TAG, "Remote audio track was already disposed", exception);
+            }
+        }
+    }
+
+    private void applyRemoteAudioVolume(@Nullable MediaStream mediaStream) {
+        if (mediaStream == null) {
+            return;
+        }
+        double volume = remoteAudioPlayoutEnabled ? 1.0 : 0.0;
+        for (AudioTrack audioTrack : mediaStream.audioTracks) {
+            applyRemoteAudioVolume(audioTrack, volume);
+        }
+    }
+
+    private void applyRemoteAudioVolume(AudioTrack audioTrack, double volume) {
+        try {
+            String trackId = audioTrack.id();
+            audioTrack.setVolume(volume);
+            remoteAudioTracks.put(trackId, audioTrack);
+        } catch (IllegalStateException exception) {
+            Log.w(TAG, "Remote audio track was already disposed", exception);
+        }
+    }
+
+    private void removeRemoteAudioTrack(MediaStreamTrack mediaStreamTrack) {
+        try {
+            String trackId = mediaStreamTrack.id();
+            if (remoteAudioTracks.get(trackId) == mediaStreamTrack) {
+                remoteAudioTracks.remove(trackId);
+            }
+        } catch (IllegalStateException exception) {
+            Log.w(TAG, "Remote audio track was already disposed", exception);
+        }
+    }
+
     public void removePeerConnection() {
         signalingMessageReceiver.removeListener(webRtcMessageListener);
 
@@ -276,6 +324,8 @@ public class PeerConnectionWrapper {
         }
 
         synchronized (this) {
+            stream = null;
+            remoteAudioTracks.clear();
             for (DataChannel dataChannel : dataChannels.values()) {
                 String label;
                 try {
@@ -330,7 +380,7 @@ public class PeerConnectionWrapper {
      *
      * @param dataChannelMessage the message to send
      */
-    public synchronized void send(DataChannelMessage dataChannelMessage) {
+    public synchronized void send(DataChannelMessageDto dataChannelMessage) {
         if (dataChannelMessage == null) {
             return;
         }
@@ -348,7 +398,7 @@ public class PeerConnectionWrapper {
         sendWithoutQueuing(statusDataChannel, dataChannelMessage);
     }
 
-    private void sendWithoutQueuing(DataChannel statusDataChannel, DataChannelMessage dataChannelMessage) {
+    private void sendWithoutQueuing(DataChannel statusDataChannel, DataChannelMessageDto dataChannelMessage) {
         try {
             Log.d(TAG, "Sending data channel message (" + dataChannelMessage + ") " + sessionId);
 
@@ -380,8 +430,8 @@ public class PeerConnectionWrapper {
         return false;
     }
 
-    private NCSignalingMessage createBaseSignalingMessage(String type) {
-        NCSignalingMessage ncSignalingMessage = new NCSignalingMessage();
+    private NCSignalingMessageDto createBaseSignalingMessage(String type) {
+        NCSignalingMessageDto ncSignalingMessage = new NCSignalingMessageDto();
         ncSignalingMessage.setTo(sessionId);
         ncSignalingMessage.setRoomType(videoStreamType);
         ncSignalingMessage.setType(type);
@@ -449,7 +499,7 @@ public class PeerConnectionWrapper {
                 }
 
                 if (dataChannel.state() == DataChannel.State.OPEN && "status".equals(dataChannelLabel)) {
-                    for (DataChannelMessage dataChannelMessage : pendingDataChannelMessages) {
+                    for (DataChannelMessageDto dataChannelMessage : pendingDataChannelMessages) {
                         sendWithoutQueuing(dataChannel, dataChannelMessage);
                     }
                     pendingDataChannelMessages.clear();
@@ -480,9 +530,9 @@ public class PeerConnectionWrapper {
             String strData = new String(bytes);
             Log.d(TAG, "Received data channel message (" + strData + ") over " + dataChannelLabel + " " + sessionId);
 
-            DataChannelMessage dataChannelMessage;
+            DataChannelMessageDto dataChannelMessage;
             try {
-                dataChannelMessage = LoganSquare.parse(strData, DataChannelMessage.class);
+                dataChannelMessage = LoganSquare.parse(strData, DataChannelMessageDto.class);
             } catch (IOException e) {
                 Log.d(TAG, "Failed to parse data channel message");
 
@@ -560,11 +610,11 @@ public class PeerConnectionWrapper {
 
         @Override
         public void onIceCandidate(IceCandidate iceCandidate) {
-            NCSignalingMessage ncSignalingMessage = createBaseSignalingMessage("candidate");
-            NCMessagePayload ncMessagePayload = new NCMessagePayload();
+            NCSignalingMessageDto ncSignalingMessage = createBaseSignalingMessage("candidate");
+            NCMessagePayloadDto ncMessagePayload = new NCMessagePayloadDto();
             ncMessagePayload.setType("candidate");
 
-            NCIceCandidate ncIceCandidate = new NCIceCandidate();
+            NCIceCandidateDto ncIceCandidate = new NCIceCandidateDto();
             ncIceCandidate.setSdpMid(iceCandidate.sdpMid);
             ncIceCandidate.setSdpMLineIndex(iceCandidate.sdpMLineIndex);
             ncIceCandidate.setCandidate(iceCandidate.sdp);
@@ -582,14 +632,22 @@ public class PeerConnectionWrapper {
 
         @Override
         public void onAddStream(MediaStream mediaStream) {
-            stream = mediaStream;
+            synchronized (PeerConnectionWrapper.this) {
+                stream = mediaStream;
+                applyRemoteAudioVolume(mediaStream);
+            }
 
             peerConnectionNotifier.notifyStreamAdded(mediaStream);
         }
 
         @Override
         public void onRemoveStream(MediaStream mediaStream) {
-            stream = null;
+            synchronized (PeerConnectionWrapper.this) {
+                stream = null;
+                for (AudioTrack audioTrack : mediaStream.audioTracks) {
+                    removeRemoteAudioTrack(audioTrack);
+                }
+            }
 
             peerConnectionNotifier.notifyStreamRemoved(mediaStream);
         }
@@ -648,6 +706,27 @@ public class PeerConnectionWrapper {
 
         @Override
         public void onAddTrack(RtpReceiver rtpReceiver, MediaStream[] mediaStreams) {
+            MediaStreamTrack track = rtpReceiver.track();
+            synchronized (PeerConnectionWrapper.this) {
+                if (track instanceof AudioTrack) {
+                    AudioTrack audioTrack = (AudioTrack) track;
+                    applyRemoteAudioVolume(audioTrack, remoteAudioPlayoutEnabled ? 1.0 : 0.0);
+                }
+                for (MediaStream mediaStream : mediaStreams) {
+                    stream = mediaStream;
+                    applyRemoteAudioVolume(mediaStream);
+                }
+            }
+        }
+
+        @Override
+        public void onRemoveTrack(RtpReceiver rtpReceiver) {
+            MediaStreamTrack track = rtpReceiver.track();
+            if (track instanceof AudioTrack) {
+                synchronized (PeerConnectionWrapper.this) {
+                    removeRemoteAudioTrack(track);
+                }
+            }
         }
     }
 
@@ -669,8 +748,8 @@ public class PeerConnectionWrapper {
         public void onCreateSuccess(SessionDescription sessionDescription) {
             String type = sessionDescription.type.canonicalForm();
 
-            NCSignalingMessage ncSignalingMessage = createBaseSignalingMessage(type);
-            NCMessagePayload ncMessagePayload = new NCMessagePayload();
+            NCSignalingMessageDto ncSignalingMessage = createBaseSignalingMessage(type);
+            NCMessagePayloadDto ncMessagePayload = new NCMessagePayloadDto();
             ncMessagePayload.setType(type);
 
             SessionDescription sessionDescriptionWithPreferredCodec;

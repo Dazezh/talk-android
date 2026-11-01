@@ -8,8 +8,6 @@ package com.nextcloud.talk.ui.chat
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,10 +18,7 @@ import androidx.compose.ui.res.stringResource
 import com.nextcloud.talk.R
 import com.nextcloud.talk.chat.ui.model.ChatMessageUi
 import com.nextcloud.talk.chat.ui.model.MessageTypeContent
-import com.nextcloud.talk.models.json.opengraph.Reference
-import com.nextcloud.talk.stickers.data.stickerImageUrl
 import com.nextcloud.talk.stickers.ui.StickerImage
-import com.nextcloud.talk.ui.theme.LocalReferenceResolver
 import com.nextcloud.talk.utils.preferences.RalkAppearancePreferences
 
 /**
@@ -37,21 +32,9 @@ fun StickerMessage(
     isOneToOneConversation: Boolean = false,
     conversationThreadId: Long? = null
 ) {
-    val resolveReference = LocalReferenceResolver.current
-    val reference by produceState<Reference?>(initialValue = null, key1 = typeContent.url) {
-        value = resolveReference(typeContent.url)
-    }
-
-    val stickerUrl = reference?.stickerImageUrl()
-    if (stickerUrl == null) {
-        LinkMessage(
-            typeContent = MessageTypeContent.LinkPreview(typeContent.url),
-            message = message,
-            isOneToOneConversation = isOneToOneConversation,
-            conversationThreadId = conversationThreadId
-        )
-        return
-    }
+    // The sticker message already carries the direct image URL, which is served by the instance the
+    // sticker lives on (the own server or, for federated stickers, the remote one).
+    val stickerUrl = typeContent.url
 
     val context = LocalContext.current
     val stickerScale = remember(context) { RalkAppearancePreferences(context).stickerSize.scale }

@@ -1,7 +1,7 @@
 /*
  * Nextcloud Talk - Android Client
  *
- * SPDX-FileCopyrightText: 2026 Andy Scherzinger <andy.scherzinger@nextcloud.com>
+ * SPDX-FileCopyrightText: 2026 Andy Scherzinger <info@andy-scherzinger.de>
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -11,20 +11,22 @@ import android.app.Application
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.nextcloud.talk.arbitrarystorage.ArbitraryStorageManager
 import com.nextcloud.talk.chat.data.model.ChatMessage
 import com.nextcloud.talk.chat.data.network.ChatMessageSyncer
 import com.nextcloud.talk.chat.data.network.ChatNetworkDataSource
 import com.nextcloud.talk.data.network.NetworkMonitor
 import com.nextcloud.talk.data.source.local.TalkDatabase
+import com.nextcloud.talk.data.storage.ArbitraryStoragesRepositoryImpl
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.data.user.model.UserEntity
 import com.nextcloud.talk.logger.Logger
-import com.nextcloud.talk.models.json.capabilities.Capabilities
-import com.nextcloud.talk.models.json.capabilities.SpreedCapability
-import com.nextcloud.talk.models.json.chat.ChatMessageJson
+import com.nextcloud.talk.models.json.capabilities.CapabilitiesDto
+import com.nextcloud.talk.models.json.capabilities.SpreedCapabilityDto
+import com.nextcloud.talk.models.json.chat.ChatMessageDto
 import com.nextcloud.talk.models.json.chat.ChatOCS
 import com.nextcloud.talk.models.json.chat.ChatOverall
-import com.nextcloud.talk.models.json.conversations.Conversation
+import com.nextcloud.talk.models.json.conversations.ConversationDto
 import com.nextcloud.talk.utils.ApiUtils
 import io.reactivex.Observable
 import io.reactivex.android.plugins.RxAndroidPlugins
@@ -38,6 +40,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -72,7 +75,9 @@ class RoomListMessagePrefetchIntegrationTest {
         db = Room.inMemoryDatabaseBuilder(context, TalkDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        db.usersDao().saveUser(UserEntity(id = ACCOUNT_ID, userId = "me", username = "me", baseUrl = BASE_URL))
+        runBlocking {
+            db.usersDao().saveUser(UserEntity(id = ACCOUNT_ID, userId = "me", username = "me", baseUrl = BASE_URL))
+        }
 
         whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
 
@@ -92,6 +97,7 @@ class RoomListMessagePrefetchIntegrationTest {
             networkMonitor,
             syncer,
             conversationListUpdater,
+            ArbitraryStorageManager(ArbitraryStoragesRepositoryImpl(db.arbitraryStoragesDao())),
             context,
             mock<Logger>()
         )
@@ -109,7 +115,8 @@ class RoomListMessagePrefetchIntegrationTest {
             conversation(ROOM_A, unreadMessages = 2, lastMessageId = 12),
             conversation(ROOM_B, unreadMessages = 1, lastMessageId = 7)
         )
-        whenever(conversationsNetwork.getRooms(any(), any(), any())).thenReturn(Observable.just(rooms))
+        whenever(conversationsNetwork.getRooms(any(), any(), any(), anyOrNull()))
+            .thenReturn(roomList(rooms))
         wheneverBlocking { chatNetwork.pullChatMessages(any(), eq(chatUrl(ROOM_A)), any()) }
             .thenReturn(Response.success(overall(message(10, ROOM_A), message(11, ROOM_A), message(12, ROOM_A))))
         wheneverBlocking { chatNetwork.pullChatMessages(any(), eq(chatUrl(ROOM_B)), any()) }
@@ -165,21 +172,21 @@ class RoomListMessagePrefetchIntegrationTest {
             username = "me",
             baseUrl = BASE_URL,
             token = "app-password",
-            capabilities = Capabilities().apply {
-                spreedCapability = SpreedCapability().apply { features = listOf("chat-keep-notifications") }
+            capabilities = CapabilitiesDto().apply {
+                spreedCapability = SpreedCapabilityDto().apply { features = listOf("chat-keep-notifications") }
             }
         )
 
-    private fun conversation(roomToken: String, unreadMessages: Int, lastMessageId: Long): Conversation =
-        Conversation(
+    private fun conversation(roomToken: String, unreadMessages: Int, lastMessageId: Long): ConversationDto =
+        ConversationDto(
             token = roomToken,
             lastActivity = lastMessageId,
             unreadMessages = unreadMessages,
             lastMessage = message(lastMessageId, roomToken)
         )
 
-    private fun message(id: Long, roomToken: String): ChatMessageJson =
-        ChatMessageJson(
+    private fun message(id: Long, roomToken: String): ChatMessageDto =
+        ChatMessageDto(
             id = id,
             token = roomToken,
             actorType = "users",
@@ -191,7 +198,7 @@ class RoomListMessagePrefetchIntegrationTest {
             systemMessageType = ChatMessage.SystemMessageType.DUMMY
         )
 
-    private fun overall(vararg messages: ChatMessageJson): ChatOverall =
+    private fun overall(vararg messages: ChatMessageDto): ChatOverall =
         ChatOverall(ocs = ChatOCS(meta = null, data = messages.toList()))
 
     private fun chatUrl(roomToken: String): String = ApiUtils.getUrlForChat(1, BASE_URL, roomToken)
@@ -205,3 +212,6 @@ class RoomListMessagePrefetchIntegrationTest {
         private const val POLL_INTERVAL_MILLIS = 50L
     }
 }
+
+private fun roomList(conversations: List<ConversationDto>): Observable<RoomListResult> =
+    Observable.just(RoomListResult(conversations, modifiedBefore = null, wasDelta = false))

@@ -32,8 +32,9 @@ import com.nextcloud.talk.R
 import com.nextcloud.talk.chat.ui.model.ChatMessageUi
 import com.nextcloud.talk.chat.ui.model.MessageTypeContent
 import com.nextcloud.talk.contacts.load
-import com.nextcloud.talk.models.json.opengraph.OpenGraphObject
-import com.nextcloud.talk.ui.theme.LocalReferenceResolver
+import com.nextcloud.talk.models.json.opengraph.OpenGraphObjectDto
+import com.nextcloud.talk.ui.theme.LocalOpenGraphFetcher
+import com.nextcloud.talk.utils.UriUtils
 import androidx.core.net.toUri
 
 private val previewImageHeight = 120.dp
@@ -46,11 +47,11 @@ fun LinkMessage(
     isOneToOneConversation: Boolean = false,
     conversationThreadId: Long? = null
 ) {
-    val resolveReference = LocalReferenceResolver.current
+    val fetchOpenGraph = LocalOpenGraphFetcher.current
     val highlightSearchTerm = LocalHighlightSearchTerm.current
-    val openGraphObject by produceState<OpenGraphObject?>(initialValue = null, key1 = typeContent.url) {
+    val openGraphObject by produceState<OpenGraphObjectDto?>(initialValue = null, key1 = typeContent.url) {
         if (typeContent.url.isNotEmpty()) {
-            value = resolveReference(typeContent.url)?.openGraphObject
+            value = fetchOpenGraph(typeContent.url)
         }
     }
 
@@ -70,7 +71,8 @@ fun LinkMessage(
                     LinkPreviewCard(
                         og = og,
                         url = og.link?.takeIf { it.isNotBlank() } ?: typeContent.url,
-                        highlightSearchTerm = highlightSearchTerm
+                        highlightSearchTerm = highlightSearchTerm,
+                        typeContent = typeContent
                     )
                 }
             }
@@ -79,7 +81,12 @@ fun LinkMessage(
 }
 
 @Composable
-private fun LinkPreviewCard(og: OpenGraphObject, url: String, highlightSearchTerm: String?) {
+private fun LinkPreviewCard(
+    og: OpenGraphObjectDto,
+    url: String,
+    highlightSearchTerm: String?,
+    typeContent: MessageTypeContent.LinkPreview
+) {
     val context = LocalContext.current
     Surface(
         shape = MaterialTheme.shapes.small,
@@ -97,13 +104,13 @@ private fun LinkPreviewCard(og: OpenGraphObject, url: String, highlightSearchTer
                 og = og,
                 highlightSearchTerm = highlightSearchTerm
             )
-            LinkPreviewImage(thumbUrl = og.thumb, context = context)
+            LinkPreviewImage(thumbUrl = og.thumb, context = context, typeContent = typeContent)
         }
     }
 }
 
 @Composable
-private fun LinkPreviewTexts(og: OpenGraphObject, highlightSearchTerm: String?) {
+private fun LinkPreviewTexts(og: OpenGraphObjectDto, highlightSearchTerm: String?) {
     val highlightedName = rememberSearchHighlightedText(og.name, highlightSearchTerm)
     val highlightedDescription = rememberSearchHighlightedText(og.description.orEmpty(), highlightSearchTerm)
     val highlightedLink = rememberSearchHighlightedText(
@@ -140,12 +147,19 @@ private fun LinkPreviewTexts(og: OpenGraphObject, highlightSearchTerm: String?) 
 }
 
 @Composable
-private fun LinkPreviewImage(thumbUrl: String?, context: android.content.Context) {
+private fun LinkPreviewImage(
+    thumbUrl: String?,
+    context: android.content.Context,
+    typeContent: MessageTypeContent.LinkPreview
+) {
     thumbUrl?.takeIf { it.isNotBlank() }?.let {
+        // Credentials only for images of the account's own server, never for external ones.
+        val isOwnServer = typeContent.serverBaseUrl?.let { baseUrl -> UriUtils.isOnServer(it, baseUrl) } == true
         val loadedImage = load(
             imageUri = it,
             context = context,
-            errorPlaceholderImage = R.drawable.ic_mimetype_image
+            errorPlaceholderImage = R.drawable.ic_mimetype_image,
+            authHeader = if (isOwnServer) typeContent.authHeader else null
         )
         AsyncImage(
             model = loadedImage,

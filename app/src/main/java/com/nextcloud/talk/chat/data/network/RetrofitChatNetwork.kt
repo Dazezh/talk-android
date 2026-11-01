@@ -10,18 +10,17 @@ import com.nextcloud.talk.api.NcApi
 import com.nextcloud.talk.api.NcApiCoroutines
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.models.domain.ConversationModel
-import com.nextcloud.talk.models.json.capabilities.SpreedCapability
-import com.nextcloud.talk.models.json.chat.ChatMessageJson
+import com.nextcloud.talk.models.json.capabilities.SpreedCapabilityDto
+import com.nextcloud.talk.models.json.chat.ChatMessageDto
 import com.nextcloud.talk.models.json.chat.ChatOverall
 import com.nextcloud.talk.models.json.chat.ChatOverallSingleMessage
 import com.nextcloud.talk.models.json.conversations.RoomOverall
 import com.nextcloud.talk.models.json.generic.GenericOverall
-import com.nextcloud.talk.models.json.opengraph.Reference
-import com.nextcloud.talk.models.json.reminder.Reminder
+import com.nextcloud.talk.models.json.opengraph.ReferenceDto
+import com.nextcloud.talk.models.json.reminder.ReminderDto
 import com.nextcloud.talk.models.json.upcomingEvents.UpcomingEventsOverall
 import com.nextcloud.talk.models.json.userAbsence.UserAbsenceOverall
 import com.nextcloud.talk.utils.ApiUtils
-import com.nextcloud.talk.utils.message.SendMessageUtils
 import io.reactivex.Observable
 import retrofit2.Response
 
@@ -38,7 +37,7 @@ class RetrofitChatNetwork(private val ncApi: NcApi, private val ncApiCoroutines:
         return ConversationModel.mapToConversationModel(roomOverall.ocs?.data!!, user)
     }
 
-    override fun getCapabilities(user: User, roomToken: String): Observable<SpreedCapability> {
+    override fun getCapabilities(user: User, roomToken: String): Observable<SpreedCapabilityDto> {
         val credentials: String = ApiUtils.getCredentials(user.username, user.token)!!
         val apiVersion = ApiUtils.getConversationApiVersion(user, intArrayOf(ApiUtils.API_V4, ApiUtils.API_V3, 1))
 
@@ -59,81 +58,61 @@ class RetrofitChatNetwork(private val ncApi: NcApi, private val ncApiCoroutines:
         ).map { ConversationModel.mapToConversationModel(it.ocs?.data!!, user) }
     }
 
-    override fun setReminder(
+    override suspend fun setReminder(
         user: User,
         roomToken: String,
         messageId: String,
         timeStamp: Int,
         chatApiVersion: Int
-    ): Observable<Reminder> {
-        val credentials: String = ApiUtils.getCredentials(user.username, user.token)!!
-        return ncApi.setReminder(
-            credentials,
+    ): ReminderDto =
+        ncApiCoroutines.setReminder(
+            ApiUtils.getCredentials(user.username, user.token)!!,
             ApiUtils.getUrlForReminder(user, roomToken, messageId, chatApiVersion),
             timeStamp
-        ).map {
-            it.ocs!!.data
-        }
-    }
+        ).ocs!!.data!!
 
-    override fun getReminder(
+    override suspend fun getReminder(
         user: User,
         roomToken: String,
         messageId: String,
         chatApiVersion: Int
-    ): Observable<Reminder> {
-        val credentials: String = ApiUtils.getCredentials(user.username, user.token)!!
-        return ncApi.getReminder(
-            credentials,
+    ): ReminderDto =
+        ncApiCoroutines.getReminder(
+            ApiUtils.getCredentials(user.username, user.token)!!,
             ApiUtils.getUrlForReminder(user, roomToken, messageId, chatApiVersion)
-        ).map {
-            it.ocs!!.data
-        }
-    }
+        ).ocs!!.data!!
 
-    override fun deleteReminder(
+    override suspend fun deleteReminder(
         user: User,
         roomToken: String,
         messageId: String,
         chatApiVersion: Int
-    ): Observable<GenericOverall> {
-        val credentials: String = ApiUtils.getCredentials(user.username, user.token)!!
-        return ncApi.deleteReminder(
-            credentials,
+    ): GenericOverall =
+        ncApiCoroutines.deleteReminder(
+            ApiUtils.getCredentials(user.username, user.token)!!,
             ApiUtils.getUrlForReminder(user, roomToken, messageId, chatApiVersion)
-        ).map {
-            it
-        }
-    }
+        )
 
-    override fun shareToNotes(
+    override suspend fun shareToNotes(
         credentials: String,
         url: String,
         message: String,
-        displayName: String
-    ): Observable<ChatOverallSingleMessage> =
-        ncApi.sendChatMessage(
-            credentials,
-            url,
-            message,
-            displayName,
-            null,
-            false,
-            SendMessageUtils().generateReferenceId()
-        ).map {
-            it
-        }
+        displayName: String,
+        referenceId: String
+    ): ChatOverallSingleMessage =
+        ncApiCoroutines.sendChatMessage(credentials, url, message, displayName, 0, false, referenceId, null)
 
     override suspend fun checkForNoteToSelf(credentials: String, url: String): RoomOverall =
         ncApiCoroutines.getNoteToSelfRoom(credentials, url)
 
-    override fun shareLocationToNotes(
+    override suspend fun shareLocationToNotes(
         credentials: String,
         url: String,
         objectType: String,
         objectId: String,
-        metadata: String
-    ): Observable<GenericOverall> = ncApi.sendLocation(credentials, url, objectType, objectId, metadata).map { it }
+        metadata: String,
+        referenceId: String
+    ): GenericOverall = ncApiCoroutines.sendLocation(credentials, url, objectType, objectId, metadata, referenceId)
 
     override suspend fun leaveRoom(credentials: String, url: String): GenericOverall =
         ncApiCoroutines.leaveRoom(credentials, url)
@@ -209,7 +188,7 @@ class RetrofitChatNetwork(private val ncApi: NcApi, private val ncApiCoroutines:
         messageId: String,
         limit: Int,
         threadId: Int?
-    ): List<ChatMessageJson> {
+    ): List<ChatMessageDto> {
         val url = ApiUtils.getUrlForChatMessageContext(baseUrl, token, messageId)
         return ncApiCoroutines.getContextOfChatMessage(credentials, url, limit, threadId).ocs?.data ?: listOf()
     }
@@ -218,7 +197,7 @@ class RetrofitChatNetwork(private val ncApi: NcApi, private val ncApiCoroutines:
         credentials: String,
         baseUrl: String,
         extractedLinkToPreview: String
-    ): Reference? {
+    ): ReferenceDto? {
         val openGraphLink = ApiUtils.getUrlForOpenGraph(baseUrl)
         return ncApi.getOpenGraph(
             credentials,

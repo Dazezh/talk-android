@@ -11,14 +11,14 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import com.github.aurae.retrofit2.LoganSquareConverterFactory;
-import com.nextcloud.talk.R;
+import com.nextcloud.talk.api.LoggingHttpInterceptor;
 import com.nextcloud.talk.api.NcApi;
 import com.nextcloud.talk.api.NcApiCoroutines;
 import com.nextcloud.talk.application.NextcloudTalkApplication;
 import com.nextcloud.talk.users.UserManager;
+import com.nextcloud.talk.utils.AccountCookieInterceptor;
 import com.nextcloud.talk.utils.ApiUtils;
-import com.nextcloud.talk.utils.RemoteWipeInterceptor;
-import com.nextcloud.talk.utils.LoggingUtils;
+import com.nextcloud.talk.utils.RejectedCredentialsInterceptor;
 import com.nextcloud.talk.utils.preferences.AppPreferences;
 import com.nextcloud.talk.utils.ssl.KeyManager;
 import com.nextcloud.talk.utils.ssl.SSLSocketFactoryCompat;
@@ -34,8 +34,6 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import javax.inject.Singleton;
@@ -49,7 +47,6 @@ import dagger.Provides;
 import io.reactivex.schedulers.Schedulers;
 import okhttp3.Authenticator;
 import okhttp3.Cache;
-import okhttp3.ConnectionSpec;
 import okhttp3.Credentials;
 import okhttp3.Dispatcher;
 import okhttp3.Interceptor;
@@ -58,8 +55,6 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.Route;
-import okhttp3.internal.tls.OkHostnameVerifier;
-import com.nextcloud.talk.api.LoggingHttpInterceptor;
 import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 
@@ -187,8 +182,8 @@ public class RestModule {
                                    SSLSocketFactoryCompat sslSocketFactoryCompat, Cache cache,
                                    CookieManager cookieManager,
                                    Dispatcher dispatcher,
-                                   UserManager userManager,
-                                   LoggingHttpInterceptor loggingHttpInterceptor) {
+                                   LoggingHttpInterceptor loggingHttpInterceptor,
+                                   AccountCookieInterceptor accountCookieInterceptor) {
         OkHttpClient.Builder httpClient = new OkHttpClient.Builder();
 
         httpClient.retryOnConnectionFailure(true);
@@ -202,7 +197,8 @@ public class RestModule {
         // Trust own CA and all self-signed certs
         httpClient.sslSocketFactory(sslSocketFactoryCompat, trustManager);
         httpClient.retryOnConnectionFailure(true);
-        httpClient.hostnameVerifier(trustManager.getHostnameVerifier(OkHostnameVerifier.INSTANCE));
+        // okhttp's default verifier (OkHostnameVerifier), read through public API instead of okhttp3.internal
+        httpClient.hostnameVerifier(trustManager.getHostnameVerifier(new OkHttpClient().hostnameVerifier()));
 
         httpClient.dispatcher(dispatcher);
         if (!Proxy.NO_PROXY.equals(proxy)) {
@@ -221,9 +217,10 @@ public class RestModule {
         }
 
         httpClient.addInterceptor(new HeadersInterceptor());
-        // remote wipe is deactivated for 25.0.2 and will come back with improvements in 25.1.x
-//      httpClient.addInterceptor(new RemoteWipeInterceptor(userManager, context, sslSocketFactoryCompat, trustManager));
+        httpClient.addInterceptor(new RejectedCredentialsInterceptor());
         httpClient.addInterceptor(loggingHttpInterceptor);
+        // Each account keeps its own cookies, so its server session is kept but never used by another account.
+        httpClient.addNetworkInterceptor(accountCookieInterceptor);
 
         return httpClient.build();
     }

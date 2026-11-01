@@ -150,6 +150,7 @@
     <string name="nc_call_button_content_description_hangup">Raccrocher</string>
     <string name="nc_call_button_content_description_microphone">Activer/Désactiver le micro</string>
     <string name="nc_call_button_content_description_pip">Lancer le mode Image dans l\'Image</string>
+    <string name="nc_call_button_content_description_switch_camera">Changer de caméra</string>
     <string name="nc_call_button_content_description_switch_to_self_vide">Basculer mode selfie</string>
     <string name="nc_call_e2ee_not_supported">Les appels ne sont actuellement pas pris en charge, car le chiffrement de bout en bout est activé sur le serveur</string>
     <string name="nc_call_e2ee_not_supported_title">Appel indisponible depuis %s</string>
@@ -365,6 +366,7 @@
     <string name="nc_location_unknown">Position inconnue</string>
     <string name="nc_locked">Verrouillé</string>
     <string name="nc_locked_tap_to_unlock">Appuyer pour déverrouiller</string>
+    <string name="nc_login_too_many_attempts">Trop de tentatives de connexion depuis ce réseau. Réessayez plus tard.</string>
     <string name="nc_logs_advanced_logging">Journalisation avancée</string>
     <string name="nc_logs_advanced_logging_disable">Désactiver la journalisation avancée</string>
     <string name="nc_logs_advanced_logging_enable">Activer la journalisation avancée</string>
@@ -397,6 +399,7 @@
     <string name="nc_message_added_to_notes">Message ajouté aux notes</string>
     <string name="nc_message_failed">Impossible d\'envoyer le message</string>
     <string name="nc_message_failed_to_send">Échec d\'envoi du message :</string>
+    <string name="nc_message_not_added_to_notes">Impossible d\'ajouter le message aux notes</string>
     <string name="nc_message_quote_cancel_reply">Annuler la réponse</string>
     <string name="nc_message_read">Message lu</string>
     <string name="nc_message_scheduled">Message planifié</string>
@@ -475,6 +478,7 @@
     <string name="nc_push_notification_error">Désolé, quelque chose s\'est mal passé, l\'erreur est %1$s</string>
     <string name="nc_push_notification_fetch_error">Désolé, quelque chose s\'est mal passé, impossible de récupérer le message de test push</string>
     <string name="nc_push_notification_message">La notification push a été envoyée avec succès. Vous devriez maintenant recevoir une notification sur cet appareil intitulée « Test des notifications push ».</string>
+    <string name="nc_reauthorize_different_account">Vous vous êtes connecté avec un compte différent. Connectez-vous avec le compte que vous voulez réautoriser.</string>
     <string name="nc_remind">Rappelez-moi plus tard</string>
     <string name="nc_remote_wipe_logged_out">Les informations d\'identification de ce compte ne sont plus valides</string>
     <string name="nc_remove_color">Retirer la couleur</string>

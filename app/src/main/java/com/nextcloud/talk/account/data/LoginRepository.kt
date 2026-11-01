@@ -31,6 +31,9 @@ class LoginRepository(val network: NetworkLoginDataSource, val local: LocalLogin
         val TAG: String = LoginRepository::class.java.simpleName
         private const val INTERVAL = 250L
         private const val HTTP_OK = 200
+
+        /** The status of a [LoginCompletion] for a login the server refused because of too many failed logins. */
+        const val HTTP_TOO_MANY_REQUESTS = 429
         private const val USER_KEY = "user:"
         private const val SERVER_KEY = "server:"
         private const val PASS_KEY = "password:"
@@ -39,7 +42,25 @@ class LoginRepository(val network: NetworkLoginDataSource, val local: LocalLogin
         private const val MAX_ARGS = 3
     }
 
+    /**
+     * Result of [parseAndLogin].
+     */
+    sealed interface LoginResult {
+        /** A new account, to be verified and stored with the data in [bundle]. */
+        data class NewAccount(val bundle: Bundle) : LoginResult
+
+        /** An existing account, reauthorized or not. */
+        data object ExistingAccount : LoginResult
+
+        /** The account is still being removed, so it can't be set up again yet. */
+        data object RemovalPending : LoginResult
+
+        /** A reauthorization in which a different account than the one to reauthorize logged in. */
+        data object DifferentAccount : LoginResult
+    }
+
     private var shouldReauthorizeUser = false
+    private var accountToReauthorize: Long? = null
     private var shouldLoop = true
 
     suspend fun pollLogin(response: LoginResponse): LoginCompletion? =
@@ -63,8 +84,13 @@ class LoginRepository(val network: NetworkLoginDataSource, val local: LocalLogin
      * Entry point for QR scanner
      *
      */
-    fun startLoginFlowFromQR(dataString: String, reAuth: Boolean = false): LoginCompletion? {
+    fun startLoginFlowFromQR(
+        dataString: String,
+        reAuth: Boolean = false,
+        accountToReauthorize: Long? = null
+    ): LoginCompletion? {
         shouldReauthorizeUser = reAuth
+        this.accountToReauthorize = accountToReauthorize
 
         if (!dataString.startsWith(PREFIX)) {
             Log.e(TAG, "Invalid login URL detected")
@@ -108,9 +134,14 @@ class LoginRepository(val network: NetworkLoginDataSource, val local: LocalLogin
     /**
      * Entry point for a one-time QR code
      */
-    suspend fun startOTPLoginFlow(dataString: String, reAuth: Boolean = false): LoginCompletion? =
+    suspend fun startOTPLoginFlow(
+        dataString: String,
+        reAuth: Boolean = false,
+        accountToReauthorize: Long? = null
+    ): LoginCompletion? =
         withContext(Dispatchers.IO) {
             shouldReauthorizeUser = reAuth
+            this@LoginRepository.accountToReauthorize = accountToReauthorize
 
             if (!dataString.startsWith(ONE_TIME_PREFIX)) {
                 Log.e(TAG, "Invalid login URL detected")
@@ -146,7 +177,12 @@ class LoginRepository(val network: NetworkLoginDataSource, val local: LocalLogin
 
             // Need to use the qr code token to create temporary credentials to get access to the actual app password
             val credentials = Credentials.basic(loginName, appPassword)
-            val oneTimePassword = network.oneTimePasswordRequest(server, credentials)
+            val oneTimePassword = try {
+                network.oneTimePasswordRequest(server, credentials)
+            } catch (e: NetworkLoginDataSource.TooManyLoginAttemptsException) {
+                Log.w(TAG, "Server refused the one-time login because of too many failed logins", e)
+                return@withContext LoginCompletion(HTTP_TOO_MANY_REQUESTS, server, loginName, "")
+            }
 
             return@withContext if (server.isNotEmpty() && loginName.isNotEmpty() && oneTimePassword != null) {
                 LoginCompletion(HTTP_OK, server, loginName, oneTimePassword)
@@ -158,9 +194,14 @@ class LoginRepository(val network: NetworkLoginDataSource, val local: LocalLogin
     /**
      * Entry point to the login process
      */
-    suspend fun startLoginFlow(baseUrl: String, reAuth: Boolean = false): LoginResponse? =
+    suspend fun startLoginFlow(
+        baseUrl: String,
+        reAuth: Boolean = false,
+        accountToReauthorize: Long? = null
+    ): LoginResponse? =
         withContext(Dispatchers.IO) {
             shouldReauthorizeUser = reAuth
+            this@LoginRepository.accountToReauthorize = accountToReauthorize
             val response = network.anonymouslyPostLoginRequest(baseUrl)
             return@withContext response
         }
@@ -173,23 +214,38 @@ class LoginRepository(val network: NetworkLoginDataSource, val local: LocalLogin
     }
 
     /**
-     * Returns bundle if user is not scheduled for deletion or doesn't already exist, null otherwise
+     * Returns [LoginResult.NewAccount] if the account doesn't exist yet. An account that is scheduled for deletion is
+     * waited for first, [LoginResult.RemovalPending] if its removal does not finish in time. During a
+     * reauthorization, [LoginResult.DifferentAccount] if another account than the one to reauthorize logged in, set
+     * up or not, which is then left unchanged.
      */
-    fun parseAndLogin(loginData: LoginCompletion): Bundle? {
+    suspend fun parseAndLogin(loginData: LoginCompletion): LoginResult {
         if (local.checkIfUserIsScheduledForDeletion(loginData)) {
-            // however the user is not yet deleted, just start AccountRemovalWorker again to make sure to delete it.
+            // The account was removed just before and the removal did not finish yet. Make sure it runs and wait for
+            // it, as the account can then be set up again. Otherwise the login would end without any account.
             local.startAccountRemovalWorker()
-            return null
-        } else if (local.checkIfUserExists(loginData)) {
+            if (!local.awaitUserRemoval(loginData)) {
+                return LoginResult.RemovalPending
+            }
+        }
+
+        if (local.checkIfUserExists(loginData)) {
             if (shouldReauthorizeUser) {
-                local.updateUser(loginData)
+                if (!local.updateUser(loginData, accountToReauthorize)) {
+                    Log.w(TAG, "Logged in with a different account than the one to reauthorize. Skipped update.")
+                    return LoginResult.DifferentAccount
+                }
             } else {
                 Log.w(TAG, "Tried to add an account that account already exists. Skipped user creation.")
             }
 
-            return null
+            return LoginResult.ExistingAccount
+        } else if (shouldReauthorizeUser) {
+            // A reauthorization must not add the account that logged in instead.
+            Log.w(TAG, "Logged in with an account that is not set up during a reauthorization. Skipped user creation.")
+            return LoginResult.DifferentAccount
         } else {
-            return startAccountVerification(loginData)
+            return LoginResult.NewAccount(startAccountVerification(loginData))
         }
     }
 

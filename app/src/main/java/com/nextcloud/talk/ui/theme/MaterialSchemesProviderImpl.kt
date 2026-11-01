@@ -9,6 +9,8 @@ package com.nextcloud.talk.ui.theme
 
 import android.content.Context
 import com.nextcloud.android.common.ui.theme.MaterialSchemes
+import com.nextcloud.talk.data.user.model.User
+import com.nextcloud.talk.models.json.capabilities.CapabilitiesDto
 import com.nextcloud.talk.utils.preferences.RalkAppearancePreferences
 import javax.inject.Inject
 
@@ -21,7 +23,7 @@ internal class MaterialSchemesProviderImpl @Inject constructor(context: Context)
     private var schemes: MaterialSchemes? = null
 
     @Synchronized
-    override fun getMaterialSchemesForCurrentUser(): MaterialSchemes {
+    private fun brandSchemes(): MaterialSchemes {
         val seed = appearancePreferences.accentSeedOrDefault(appContext)
         val cached = schemes
         if (cached != null && cachedSeed == seed) {
@@ -33,4 +35,10 @@ internal class MaterialSchemesProviderImpl @Inject constructor(context: Context)
             cachedSeed = seed
         }
     }
+
+    override fun getMaterialSchemesForUser(user: User?): MaterialSchemes = brandSchemes()
+
+    override fun getMaterialSchemesForCapabilities(capabilities: CapabilitiesDto?): MaterialSchemes = brandSchemes()
+
+    override fun getMaterialSchemesForDefaultUser(): MaterialSchemes = brandSchemes()
 }

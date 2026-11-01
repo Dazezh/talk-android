@@ -18,12 +18,12 @@ import com.nextcloud.talk.api.NcApi;
 import com.nextcloud.talk.application.NextcloudTalkApplication;
 import com.nextcloud.talk.chat.MentionAutocompleteAdapter;
 import com.nextcloud.talk.data.user.model.User;
-import com.nextcloud.talk.models.json.mention.Mention;
+import com.nextcloud.talk.models.json.mention.MentionDto;
 import com.nextcloud.talk.models.json.mention.MentionOverall;
+import com.nextcloud.talk.ui.theme.HostViewThemeUtils;
 import com.nextcloud.talk.ui.theme.ViewThemeUtils;
 import com.nextcloud.talk.users.UserManager;
 import com.nextcloud.talk.utils.ApiUtils;
-import com.nextcloud.talk.utils.database.user.CurrentUserProviderOld;
 import com.otaliastudios.autocomplete.RecyclerViewPresenter;
 
 import java.util.ArrayList;
@@ -43,7 +43,7 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
 
 @AutoInjector(NextcloudTalkApplication.class)
-public class MentionAutocompletePresenter extends RecyclerViewPresenter<Mention> {
+public class MentionAutocompletePresenter extends RecyclerViewPresenter<MentionDto> {
     private static final String TAG = "MentionAutocompletePresenter";
 
     @Inject
@@ -51,9 +51,6 @@ public class MentionAutocompletePresenter extends RecyclerViewPresenter<Mention>
 
     @Inject
     UserManager userManager;
-
-    @Inject
-    CurrentUserProviderOld currentUserProvider;
 
     @Inject
     ViewThemeUtils viewThemeUtils;
@@ -65,26 +62,20 @@ public class MentionAutocompletePresenter extends RecyclerViewPresenter<Mention>
     private String roomToken;
     private int chatApiVersion;
 
-    public MentionAutocompletePresenter(Context context) {
+    public MentionAutocompletePresenter(Context context, User user, String roomToken, int chatApiVersion) {
         super(context);
-        this.context = context;
-        NextcloudTalkApplication.Companion.getSharedApplication().getComponentApplication().inject(this);
-        currentUser = currentUserProvider.getCurrentUser().blockingGet();
-    }
-
-    public MentionAutocompletePresenter(Context context, String roomToken, int chatApiVersion) {
-        super(context);
+        this.currentUser = user;
         this.roomToken = roomToken;
         this.context = context;
         this.chatApiVersion = chatApiVersion;
         NextcloudTalkApplication.Companion.getSharedApplication().getComponentApplication().inject(this);
-        currentUser = currentUserProvider.getCurrentUser().blockingGet();
+        viewThemeUtils = HostViewThemeUtils.hostViewThemeUtils(context, viewThemeUtils);
     }
 
     @Override
     protected RecyclerView.Adapter instantiateAdapter() {
         mentionAdapter = new MentionAutocompleteAdapter(context, currentUser, viewThemeUtils, roomToken, mention -> {
-            Mention result = new Mention();
+            MentionDto result = new MentionDto();
             if (mention.mentionId != null) {
                 result.setMentionId(mention.mentionId);
             }
@@ -137,7 +128,7 @@ public class MentionAutocompletePresenter extends RecyclerViewPresenter<Mention>
                 @Override
                 public void onNext(@NonNull MentionOverall mentionOverall) {
                     if (mentionOverall.getOcs() != null) {
-                        List<Mention> mentionsList = mentionOverall.getOcs().getData();
+                        List<MentionDto> mentionsList = mentionOverall.getOcs().getData();
 
                         if (mentionsList != null) {
 
@@ -145,7 +136,7 @@ public class MentionAutocompletePresenter extends RecyclerViewPresenter<Mention>
                                 mentionAdapter.clear();
                             } else {
                                 List<MentionAutocompleteItem> itemList = new ArrayList<>(mentionsList.size());
-                                for (Mention mention : mentionsList) {
+                                for (MentionDto mention : mentionsList) {
                                     itemList.add(new MentionAutocompleteItem(mention, context, roomToken));
                                 }
 

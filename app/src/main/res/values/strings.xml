@@ -32,6 +32,9 @@ How to translate with transifex:
     <string name="nc_common_set">Set</string>
     <string name="nc_common_dismiss">Dismiss</string>
     <string name="nc_common_error_sorry">Sorry, something went wrong!</string>
+    <string name="nc_login_too_many_attempts">Too many failed login attempts from this network. Try again later.</string>
+    <string name="nc_account_removal_pending">The removal of this account is not finished yet. Please try again in a moment.</string>
+    <string name="nc_reauthorize_different_account">You logged in with a different account. Log in with the account you want to reauthorize.</string>
     <string name="nc_common_create">Create</string>
     <string name="nc_common_unknown">Unknown</string>
     <string name="nc_common_disabled">Disabled</string>
@@ -55,6 +58,9 @@ How to translate with transifex:
     <string name="nc_server_helper_text">The link to your %1$s web interface when you open it in the browser.</string>
     <string name="nc_server_testing_connection">Testing connection</string>
     <string name="nc_server_unsupported">Server does not have supported Talk app installed</string>
+    <string name="nc_server_http_fallback_title">Insecure connection</string>
+    <string name="nc_server_http_fallback_message">Could not connect to the server over HTTPS. Connect over unsecured HTTP instead?</string>
+    <string name="nc_server_http_fallback_confirm">Use HTTP</string>
 
     <string name="nc_server_url">Server address https://…</string>
     <string name="nc_server_not_installed">Please finish your %1$s installation</string>
@@ -91,7 +97,7 @@ How to translate with transifex:
     <string name="nc_admin_only">Admin only</string>
 
     <string name="nc_certificate_dialog_title">Check out the certificate</string>
-    <string name="nc_certificate_dialog_text">Do you trust the until now unknown SSL certificate, issued by %1$s for %2$s, valid from %3$s to %4$s?</string>
+    <string name="nc_certificate_dialog_text_for_host">Do you trust the until now unknown SSL certificate of %1$s, issued by %2$s for %3$s, valid from %4$s to %5$s? It will only be trusted for %1$s.</string>
     <string name="nc_certificate_error">Your SSL setup prevented connection</string>
 
     <!-- Settings -->
@@ -254,9 +260,9 @@ How to translate with transifex:
     <!-- Logs screen -->
     <string name="nc_logs_title">Logs</string>
     <string name="nc_logs_share">Send as mail</string>
-    <string name="nc_logs_share_subject">%1$s logs</string>
     <string name="nc_logs_delete_all">Delete all logs</string>
     <string name="nc_logs_empty">No log entries found.</string>
+    <string name="nc_logs_mail_subject" translatable="false">%1$s logs</string>
     <string name="nc_logs_total_size">Total log size: %d KB</string>
     <string name="nc_logs_overflow_warning">Warning: some log entries were lost due to queue overflow.</string>
     <string name="nc_logs_share_latest_crash">Latest crash</string>
@@ -413,6 +419,7 @@ How to translate with transifex:
     <string name="nc_camera_permission_hint">To enable video communication please grant \"Camera\" permission.</string>
     <string name="nc_microphone_permission_hint">To enable voice communication please grant \"Microphone\" permission.</string>
     <string name="nc_bluetooth_permission_hint">To enable bluetooth speakers please grant \"Nearby devices\" permission.</string>
+    <string name="nc_notification_permission_hint">To show call notifications and keep calls active in the background, please grant \"Notifications\" permission.</string>
     <string name="nc_microphone_enabled_audio_recording">Microphone is enabled and audio is recording</string>
 
     <!-- Call -->
@@ -435,6 +442,8 @@ How to translate with transifex:
     <string name="nc_missed_call">You missed a call from %s</string>
     <string name="nc_call_ongoing_notification_default_title">Call in progress</string>
     <string name="nc_call_ongoing_notification_content">Tap to return to your call.</string>
+    <string name="nc_call_ongoing_notification_return_action">Return to call</string>
+    <string name="nc_call_ongoing_notification_end_action">End call</string>
     <string name="nc_call_button_content_description_pip">Open picture-in-picture mode</string>
     <string name="nc_call_button_content_description_audio_output">Change audio output</string>
     <string name="nc_call_button_content_description_camera">Toggle camera</string>
@@ -443,6 +452,9 @@ How to translate with transifex:
     <string name="nc_call_button_content_description_answer_voice_only">Answer as voice call only</string>
     <string name="nc_call_button_content_description_answer_video_call">Answer as video call</string>
     <string name="nc_call_button_content_description_switch_to_self_vide">Switch to self video</string>
+    <string name="nc_call_button_content_description_switch_camera">Switch camera</string>
+    <string name="nc_call_self_video_enlarge">Enlarge self video</string>
+    <string name="nc_call_self_video_shrink">Shrink self video</string>
     <string name="nc_call_raised_hand">%1$s raised the hand</string>
     <string name="raise_hand">Raise hand</string>
     <string name="lower_hand">Lower hand</string>
@@ -459,9 +471,11 @@ How to translate with transifex:
     <!-- Notification channels -->
     <string name="nc_notification_channel">%1$s on %2$s notification channel</string>
     <string name="nc_notification_channel_calls">Calls</string>
+    <string name="nc_notification_channel_calls_ongoing">Ongoing call</string>
     <string name="nc_notification_channel_messages">Messages</string>
     <string name="nc_notification_channel_uploads">Uploads</string>
     <string name="nc_notification_channel_calls_description">Notify about incoming calls</string>
+    <string name="nc_notification_channel_calls_ongoing_description">Persistent status for a call in progress</string>
     <string name="nc_notification_channel_messages_description">Notify about incoming messages</string>
     <string name="nc_notification_channel_uploads_description">Notify about upload progress</string>
     <string name="nc_notification_settings">Notification settings</string>
@@ -582,6 +596,7 @@ How to translate with transifex:
     <string name="nc_scheduled_thread">Scheduled thread</string>
     <string name="nc_reply_to_thread">Reply to thread: %1$s</string>
     <string name="nc_message_added_to_notes">Message added to notes</string>
+    <string name="nc_message_not_added_to_notes">Could not add the message to notes</string>
     <string name="nc_message_failed">Failed to send message</string>
     <string name="nc_message_failed_to_send">Failed to send message:</string>
     <string name="nc_add_attachment">Add attachment</string>
@@ -693,6 +708,7 @@ How to translate with transifex:
     <string name="typing_x_others">and %1$s others are typing …</string>
     <string name="deck_card_description">%1$s in %2$s</string>
 
+    <string name="thread">Thread</string>
     <string name="threads">Threads</string>
     <string name="open_thread">Go to thread</string>
     <string name="start_thread">Create a thread</string>
@@ -744,7 +760,6 @@ How to translate with transifex:
     <!-- location sharing -->
     <string name="nc_share_location">Share location</string>
     <string name="nc_search_location">Search location</string>
-    <string name="nc_location_permission_required">location permission is required</string>
     <string name="nc_share_current_location">Share current location</string>
     <string name="nc_share_this_location">Share this location</string>
     <string name="nc_shared_location">Shared location</string>
@@ -767,6 +782,7 @@ How to translate with transifex:
     <string name="nc_description_record_voice">Record voice message</string>
     <string name="nc_voice_message_slide_to_cancel">« Slide to cancel</string>
     <string name="play_pause_voice_message">Play/pause voice message</string>
+    <string name="play_pause_audio_file">Play/pause audio file</string>
     <string name="nc_voice_message_missing_audio_permission">Permission for audio recording is required</string>
     <string name="playback_speed_control">Playback speed control</string>
     <string name="delete_voice_recording">Delete voice recording</string>
@@ -907,8 +923,6 @@ How to translate with transifex:
     <string name="messages">Messages</string>
     <string name="load_more_results">Load more results</string>
     <string name="message_search_hint">Search …</string>
-    <string name="message_search_begin_typing">Start typing to search …</string>
-    <string name="message_search_begin_empty">No search results</string>
     <string name="message_search_previous_result">Previous search result</string>
     <string name="message_search_next_result">Next search result</string>
     <string name="message_search_no_more_results">No more messages found</string>
@@ -1106,9 +1120,7 @@ How to translate with transifex:
     <string name="qr_code_error">QR code could not be read</string>
     <string name="message_delete_are_you_sure">Are you sure you want to delete this message?</string>
     <string name="location_permission_denied">Location permission denied</string>
-    <string name="location_permission_denied_msg">Please enable it in the app settings</string>
     <string name="location_services_disabled">Location services disabled</string>
-    <string name="location_services_disabled_msg">Please enable location services (GPS) to use this feature</string>
     <string name="please_continue_the_login_process_in_the_browser">Please continue login in browser</string>
     <string name="pin_message">Pin message</string>
     <string name="unpin_message">Unpin message</string>

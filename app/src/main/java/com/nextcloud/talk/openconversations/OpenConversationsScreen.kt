@@ -84,12 +84,14 @@ import coil.request.ImageRequest
 import coil.transform.CircleCropTransformation
 import com.nextcloud.talk.R
 import com.nextcloud.talk.application.NextcloudTalkApplication
-import com.nextcloud.talk.models.json.conversations.Conversation
+import com.nextcloud.talk.models.json.conversations.ConversationDto
 import com.nextcloud.talk.models.json.conversations.ConversationEnums
 import com.nextcloud.talk.openconversations.viewmodels.OpenConversationsViewModel
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.DisplayUtils
 import kotlinx.coroutines.flow.distinctUntilChanged
+import com.nextcloud.talk.ui.withAuthHeader
+import com.nextcloud.talk.ui.LocalImageAuthHeader
 
 private val TAG = ListOpenConversationsActivity::class.java.simpleName
 
@@ -279,7 +281,7 @@ private fun ConversationsBody(
     viewState: OpenConversationsViewModel.ViewState,
     userBaseUrl: String?,
     searchTerm: String,
-    onConversationClick: (Conversation) -> Unit,
+    onConversationClick: (ConversationDto) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.imePadding()) {
@@ -331,7 +333,7 @@ private fun ConversationsBody(
 
 @Composable
 private fun OpenConversationItem(
-    conversation: Conversation,
+    conversation: ConversationDto,
     userBaseUrl: String?,
     searchTerm: String,
     onClick: () -> Unit
@@ -352,6 +354,7 @@ private fun OpenConversationItem(
     }
     val imageRequest = ImageRequest.Builder(context)
         .data(avatarUrl)
+        .withAuthHeader(LocalImageAuthHeader.current)
         .transformations(CircleCropTransformation())
         .error(errorPlaceholder)
         .placeholder(errorPlaceholder)
@@ -434,7 +437,7 @@ private fun EmptyConversationsView(headline: String, body: String, modifier: Mod
 
 class OpenConversationsScreenListenerInput(
     val onSearchTermChange: (String) -> Unit,
-    val onConversationClick: (Conversation) -> Unit,
+    val onConversationClick: (ConversationDto) -> Unit,
     val onBackClick: () -> Unit
 )
 
@@ -497,19 +500,19 @@ private fun PreviewOpenConversationsSuccess() {
             OpenConversationsScreenContent(
                 viewState = OpenConversationsViewModel.FetchConversationsSuccessState(
                     conversations = listOf(
-                        Conversation(
+                        ConversationDto(
                             token = "abc1",
                             displayName = "Design Team",
                             description = "All design discussions",
                             type = ConversationEnums.ConversationType.ROOM_GROUP_CALL
                         ),
-                        Conversation(
+                        ConversationDto(
                             token = "abc2",
                             displayName = "General",
                             description = "",
                             type = ConversationEnums.ConversationType.ROOM_PUBLIC_CALL
                         ),
-                        Conversation(
+                        ConversationDto(
                             token = "abc3",
                             displayName = "Jane Doe",
                             description = "Direct message",
@@ -584,7 +587,7 @@ private fun PreviewOpenConversationsNoSearchResults() {
             OpenConversationsScreenContent(
                 viewState = OpenConversationsViewModel.FetchConversationsSuccessState(
                     conversations = listOf(
-                        Conversation(
+                        ConversationDto(
                             token = "abc1",
                             displayName = "Design Team",
                             description = "All design discussions",
@@ -613,13 +616,13 @@ private fun PreviewOpenConversationsRtl() {
             OpenConversationsScreenContent(
                 viewState = OpenConversationsViewModel.FetchConversationsSuccessState(
                     conversations = listOf(
-                        Conversation(
+                        ConversationDto(
                             token = "abc1",
                             displayName = "فريق التصميم",
                             description = "جميع نقاشات التصميم",
                             type = ConversationEnums.ConversationType.ROOM_GROUP_CALL
                         ),
-                        Conversation(
+                        ConversationDto(
                             token = "abc2",
                             displayName = "عام",
                             description = "",

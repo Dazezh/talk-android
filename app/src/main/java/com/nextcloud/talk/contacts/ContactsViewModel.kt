@@ -11,24 +11,24 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.logger.Logger
-import com.nextcloud.talk.models.json.autocomplete.AutocompleteUser
-import com.nextcloud.talk.models.json.conversations.Conversation
-import com.nextcloud.talk.utils.database.user.CurrentUserProvider
+import com.nextcloud.talk.models.json.autocomplete.AutocompleteUserDto
+import com.nextcloud.talk.models.json.conversations.ConversationDto
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
-class ContactsViewModel @Inject constructor(
+@Suppress("TooManyFunctions")
+class ContactsViewModel @AssistedInject constructor(
     private val repository: ContactsRepository,
-    private val currentUserProvider: CurrentUserProvider,
-    private val logger: Logger
+    private val logger: Logger,
+    @Assisted val currentUser: User
 ) : ViewModel() {
 
     private val _contactsViewState = MutableStateFlow<ContactsUiState>(ContactsUiState.None)
@@ -41,8 +41,8 @@ class ContactsViewModel @Inject constructor(
     val shareTypeList: List<String> = shareTypes
     private val _isSearchActive = MutableStateFlow(false)
     val isSearchActive: StateFlow<Boolean> = _isSearchActive
-    private val selectedParticipants = MutableStateFlow<List<AutocompleteUser>>(emptyList())
-    val selectedParticipantsList: StateFlow<List<AutocompleteUser>> = selectedParticipants.asStateFlow()
+    private val selectedParticipants = MutableStateFlow<List<AutocompleteUserDto>>(emptyList())
+    val selectedParticipantsList: StateFlow<List<AutocompleteUserDto>> = selectedParticipants.asStateFlow()
     private val _isAddParticipantsView = MutableStateFlow(false)
     val isAddParticipantsView: StateFlow<Boolean> = _isAddParticipantsView
 
@@ -50,19 +50,17 @@ class ContactsViewModel @Inject constructor(
     val enableAddButton: StateFlow<Boolean> = _enableAddButton
 
     @Suppress("PropertyName")
-    private val _selectedContacts = MutableStateFlow<List<AutocompleteUser>>(emptyList())
+    private val _selectedContacts = MutableStateFlow<List<AutocompleteUserDto>>(emptyList())
 
     @Suppress("PropertyName")
     private val _clickAddButton = MutableStateFlow(false)
 
     private var hideAlreadyAddedParticipants: Boolean = false
 
-    private val currentUserFlow: StateFlow<User?> =
-        currentUserProvider.currentUserFlow
-            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    private val currentUser: User?
-        get() = currentUserFlow.value
+    @AssistedFactory
+    interface Factory {
+        fun build(user: User): ContactsViewModel
+    }
 
     companion object {
         private val TAG = ContactsViewModel::class.java.simpleName
@@ -76,7 +74,7 @@ class ContactsViewModel @Inject constructor(
         _clickAddButton.value = value
     }
 
-    fun selectContact(contact: AutocompleteUser) {
+    fun selectContact(contact: AutocompleteUserDto) {
         val updatedParticipants = selectedParticipants.value + contact
         selectedParticipants.value = updatedParticipants
         _selectedContacts.value = _selectedContacts.value + contact
@@ -86,13 +84,13 @@ class ContactsViewModel @Inject constructor(
         _enableAddButton.value = _selectedContacts.value.isNotEmpty()
     }
 
-    fun deselectContact(contact: AutocompleteUser) {
+    fun deselectContact(contact: AutocompleteUserDto) {
         val updatedParticipants = selectedParticipants.value - contact
         selectedParticipants.value = updatedParticipants
         _selectedContacts.value = _selectedContacts.value - contact
     }
 
-    fun updateSelectedParticipants(participants: List<AutocompleteUser>) {
+    fun updateSelectedParticipants(participants: List<AutocompleteUserDto>) {
         selectedParticipants.value = participants
     }
     fun setSearchActive(searchState: Boolean) {
@@ -114,10 +112,6 @@ class ContactsViewModel @Inject constructor(
     @Suppress("Detekt.TooGenericExceptionCaught")
     fun getContactsFromSearchParams(query: String = "") {
         val user = currentUser
-        if (user == null) {
-            _contactsViewState.value = ContactsUiState.Error("No current user")
-            return
-        }
         _contactsViewState.value = ContactsUiState.Loading
         viewModelScope.launch {
             try {
@@ -126,7 +120,7 @@ class ContactsViewModel @Inject constructor(
                     if (query != "") query else searchQuery.value,
                     shareTypeList
                 )
-                val contactsList: MutableList<AutocompleteUser>? = contacts.ocs!!.data?.toMutableList()
+                val contactsList: MutableList<AutocompleteUserDto>? = contacts.ocs!!.data?.toMutableList()
 
                 if (hideAlreadyAddedParticipants && !_clickAddButton.value) {
                     contactsList?.removeAll(selectedParticipants.value)
@@ -150,10 +144,6 @@ class ContactsViewModel @Inject constructor(
     suspend fun getBlockingContactsFromSearchParams(query: String = "") =
         withContext(Dispatchers.IO) {
             val user = currentUser
-            if (user == null) {
-                _contactsViewState.value = ContactsUiState.Error("No current user")
-                return@withContext
-            }
             _contactsViewState.value = ContactsUiState.Loading
             try {
                 val contacts = repository.getContacts(
@@ -161,7 +151,7 @@ class ContactsViewModel @Inject constructor(
                     if (query != "") query else searchQuery.value,
                     shareTypeList
                 )
-                val contactsList: MutableList<AutocompleteUser>? = contacts.ocs!!.data?.toMutableList()
+                val contactsList: MutableList<AutocompleteUserDto>? = contacts.ocs!!.data?.toMutableList()
 
                 if (hideAlreadyAddedParticipants && !_clickAddButton.value) {
                     contactsList?.removeAll(selectedParticipants.value)
@@ -180,13 +170,16 @@ class ContactsViewModel @Inject constructor(
             }
         }
 
+    /**
+     * Resets [roomViewState] once its result was handled, so a recreated screen doesn't handle it again.
+     */
+    fun clearRoomState() {
+        _roomViewState.value = RoomUiState.None
+    }
+
     @Suppress("Detekt.TooGenericExceptionCaught")
     fun createRoom(roomType: String, sourceType: String?, userId: String, conversationName: String?) {
         val user = currentUser
-        if (user == null) {
-            _roomViewState.value = RoomUiState.Error("No current user")
-            return
-        }
         viewModelScope.launch {
             try {
                 val room = repository.createRoom(
@@ -197,8 +190,8 @@ class ContactsViewModel @Inject constructor(
                     conversationName
                 )
 
-                val conversation: Conversation? = room.ocs?.data
-                _roomViewState.value = RoomUiState.Success(conversation)
+                val conversation: ConversationDto? = room.ocs?.data
+                _roomViewState.value = RoomUiState.Success(user.id!!, conversation)
             } catch (exception: Exception) {
                 logger.e(TAG, "Failed to create room", exception)
                 _roomViewState.value = RoomUiState.Error(exception.message ?: "")
@@ -207,25 +200,23 @@ class ContactsViewModel @Inject constructor(
     }
 
     fun getImageUri(avatarId: String, requestBigSize: Boolean, isDarkMode: Boolean): String =
-        currentUser?.let {
-            repository.getImageUri(
-                it,
-                avatarId,
-                requestBigSize,
-                isDarkMode
-            )
-        } ?: ""
+        repository.getImageUri(
+            currentUser,
+            avatarId,
+            requestBigSize,
+            isDarkMode
+        )
 
     sealed class ContactsUiState {
         data object None : ContactsUiState()
         data object Loading : ContactsUiState()
-        data class Success(val contacts: List<AutocompleteUser>?) : ContactsUiState()
+        data class Success(val contacts: List<AutocompleteUserDto>?) : ContactsUiState()
         data class Error(val message: String) : ContactsUiState()
     }
 
     sealed class RoomUiState {
         data object None : RoomUiState()
-        data class Success(val conversation: Conversation?) : RoomUiState()
+        data class Success(val userId: Long, val conversation: ConversationDto?) : RoomUiState()
         data class Error(val message: String) : RoomUiState()
     }
 }

@@ -150,6 +150,7 @@
     <string name="nc_call_button_content_description_hangup">掛斷</string>
     <string name="nc_call_button_content_description_microphone">切換麥克風</string>
     <string name="nc_call_button_content_description_pip">開啟畫中畫模式</string>
+    <string name="nc_call_button_content_description_switch_camera">切換相機</string>
     <string name="nc_call_button_content_description_switch_to_self_vide">切換到自己的視訊</string>
     <string name="nc_call_e2ee_not_supported">目前不支援通話功能，因為伺服器已啟用端對端加密</string>
     <string name="nc_call_e2ee_not_supported_title">無法從 %s 通話</string>
@@ -365,6 +366,7 @@
     <string name="nc_location_unknown">位置不明</string>
     <string name="nc_locked">已鎖定</string>
     <string name="nc_locked_tap_to_unlock">點擊可解除鎖定</string>
+    <string name="nc_login_too_many_attempts">太多來自此網路的失敗登入嘗試。請稍後再試。</string>
     <string name="nc_logs_advanced_logging">進階紀錄</string>
     <string name="nc_logs_advanced_logging_disable">停用進階紀錄</string>
     <string name="nc_logs_advanced_logging_enable">啟用進階紀錄</string>
@@ -397,6 +399,7 @@
     <string name="nc_message_added_to_notes">訊息已新增至筆記</string>
     <string name="nc_message_failed">傳送訊息失敗</string>
     <string name="nc_message_failed_to_send">傳送訊息失敗: </string>
+    <string name="nc_message_not_added_to_notes">無法新增訊息至筆記</string>
     <string name="nc_message_quote_cancel_reply">取消回覆</string>
     <string name="nc_message_read">訊息已讀</string>
     <string name="nc_message_scheduled">已安排好訊息</string>
@@ -475,6 +478,7 @@
     <string name="nc_push_notification_error">抱歉，發生了一點問題，錯誤為 %1$s</string>
     <string name="nc_push_notification_fetch_error">抱歉，發生了一點問題，無法擷取測試推播訊息</string>
     <string name="nc_push_notification_message">已成功傳送推播通知。現在您應該會在此裝置上收到標題為「測試推播通知」的通知。</string>
+    <string name="nc_reauthorize_different_account">您目前使用的是另一個帳號登入。請使用您要重新授權的帳號登入。</string>
     <string name="nc_remind">稍後提醒我</string>
     <string name="nc_remote_wipe_logged_out">此帳號的憑證不再有效</string>
     <string name="nc_remove_color">移除顏色</string>

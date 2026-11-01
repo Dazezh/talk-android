@@ -13,7 +13,7 @@ import com.nextcloud.talk.chat.data.model.ChatMessage
 import com.nextcloud.talk.data.database.model.ChatMessageEntity
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.models.domain.ConversationModel
-import com.nextcloud.talk.models.json.chat.ChatMessageJson
+import com.nextcloud.talk.models.json.chat.ChatMessageDto
 import com.nextcloud.talk.models.json.chat.ChatOverallSingleMessage
 import com.nextcloud.talk.models.json.generic.GenericOverall
 import kotlinx.coroutines.flow.Flow
@@ -138,16 +138,19 @@ interface ChatMessageRepository : LifecycleAwareManager {
         threadTitle: String?
     ): Flow<Result<ChatMessage?>>
 
-    @Suppress("LongParameterList")
-    suspend fun resendChatMessage(
-        credentials: String,
-        url: String,
-        message: String,
-        displayName: String,
-        replyTo: Int,
-        sendWithoutNotification: Boolean,
-        referenceId: String
-    ): Flow<Result<ChatMessage?>>
+    /**
+     * Resets a previously failed temporary message back to PENDING so it can be handed to
+     * SendMessageWorker for another send attempt. Does not itself send anything.
+     */
+    suspend fun markMessageForResend(referenceId: String): Flow<Result<ChatMessage?>>
+
+    /**
+     * Marks the PENDING text messages of this conversation created before [createdBefore] (epoch
+     * seconds) as FAILED, so the user can resend or delete them. Call only when no SendMessageWorker
+     * work is left for the conversation: such a message would otherwise stay PENDING forever.
+     * Returns the number of messages changed.
+     */
+    suspend fun failPendingMessagesWithoutSendWork(createdBefore: Long): Int
 
     suspend fun addTemporaryMessage(
         message: CharSequence,
@@ -173,6 +176,12 @@ interface ChatMessageRepository : LifecycleAwareManager {
      * the time this is called, so a late cancel can't hide an already-sent message.
      */
     suspend fun deleteTempMessageByReferenceId(referenceId: String): Boolean
+
+    /**
+     * Marks the upload placeholder for [referenceId] as failed, but only while it's still PENDING.
+     * Does nothing if there is no such placeholder (yet).
+     */
+    suspend fun markUploadPlaceholderFailed(referenceId: String)
 
     /**
      * Writes the new text into the local database before the server is asked, so the chat renders the
@@ -251,7 +260,7 @@ interface ChatMessageRepository : LifecycleAwareManager {
 
     suspend fun getScheduledChatMessages(credentials: String, url: String): Flow<Result<List<ChatMessage>>>
 
-    suspend fun onSignalingChatMessageReceived(chatMessages: List<ChatMessageJson>)
+    suspend fun onSignalingChatMessageReceived(chatMessages: List<ChatMessageDto>)
 
     fun observeLatestMessages(internalConversationId: String): Flow<List<ChatMessageEntity>>
 

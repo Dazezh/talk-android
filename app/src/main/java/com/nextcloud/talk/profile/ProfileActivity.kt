@@ -32,11 +32,10 @@ import com.nextcloud.talk.components.ColoredStatusBar
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.models.json.generic.GenericOverall
 import com.nextcloud.talk.models.json.userprofile.Scope
-import com.nextcloud.talk.models.json.userprofile.UserProfileData
+import com.nextcloud.talk.models.json.userprofile.UserProfileDataDto
 import com.nextcloud.talk.models.json.userprofile.UserProfileFieldsOverall
 import com.nextcloud.talk.models.json.userprofile.UserProfileOverall
 import com.nextcloud.talk.ui.dialog.ScopeModalBottomSheet
-import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
 import com.nextcloud.talk.utils.Mimetype.IMAGE_JPG
@@ -47,6 +46,7 @@ import io.reactivex.Observer
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -60,11 +60,8 @@ class ProfileActivity : BaseActivity() {
     @Inject
     lateinit var ncApi: NcApi
 
-    @Inject
-    lateinit var userManager: UserManager
-
     private var currentUser: User? = null
-    private var userInfo: UserProfileData? = null
+    private var userInfo: UserProfileDataDto? = null
     private var editableFields = ArrayList<String>()
 
     /** Single source of truth that drives the Compose UI. */
@@ -114,6 +111,7 @@ class ProfileActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NextcloudTalkApplication.sharedApplication!!.componentApplication.inject(this)
+        setUpBoundUserOrFinish() ?: return
 
         val restoredEdit = savedInstanceState?.getBoolean(KEY_EDIT_MODE) ?: false
         profileUiState = profileUiState.copy(isEditMode = restoredEdit)
@@ -172,7 +170,11 @@ class ProfileActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
 
-        currentUser = currentUserProviderOld.currentUser.blockingGet()
+        currentUser = runBlocking { userManager.getUserWithId(resolveUserIdFromIntent()) } ?: run {
+            // The account was removed while this screen was in the background.
+            finish()
+            return
+        }
         val credentials = ApiUtils.getCredentials(currentUser!!.username, currentUser!!.token)
 
         pickImage = PickImage(this, currentUser)
@@ -366,7 +368,7 @@ class ProfileActivity : BaseActivity() {
         )
     }
 
-    private fun createUserInfoDetails(userInfo: UserProfileData?): List<UserInfoDetailsItem> {
+    private fun createUserInfoDetails(userInfo: UserProfileDataDto?): List<UserInfoDetailsItem> {
         if (userInfo == null) return emptyList()
         return createIdentityItems(userInfo) +
             createContactItems(userInfo) +
@@ -374,7 +376,7 @@ class ProfileActivity : BaseActivity() {
             createProfessionalItems(userInfo)
     }
 
-    private fun createIdentityItems(userInfo: UserProfileData): List<UserInfoDetailsItem> =
+    private fun createIdentityItems(userInfo: UserProfileDataDto): List<UserInfoDetailsItem> =
         listOf(
             UserInfoDetailsItem(
                 R.drawable.ic_user,
@@ -392,7 +394,7 @@ class ProfileActivity : BaseActivity() {
             )
         )
 
-    private fun createContactItems(userInfo: UserProfileData): List<UserInfoDetailsItem> =
+    private fun createContactItems(userInfo: UserProfileDataDto): List<UserInfoDetailsItem> =
         listOf(
             UserInfoDetailsItem(
                 R.drawable.ic_email,
@@ -424,7 +426,7 @@ class ProfileActivity : BaseActivity() {
             )
         )
 
-    private fun createSocialItems(userInfo: UserProfileData): List<UserInfoDetailsItem> =
+    private fun createSocialItems(userInfo: UserProfileDataDto): List<UserInfoDetailsItem> =
         listOf(
             UserInfoDetailsItem(
                 R.drawable.ic_twitter,
@@ -449,7 +451,7 @@ class ProfileActivity : BaseActivity() {
             )
         )
 
-    private fun createProfessionalItems(userInfo: UserProfileData): List<UserInfoDetailsItem> =
+    private fun createProfessionalItems(userInfo: UserProfileDataDto): List<UserInfoDetailsItem> =
         listOf(
             UserInfoDetailsItem(
                 R.drawable.ic_home_work_24px,
@@ -625,7 +627,7 @@ class ProfileActivity : BaseActivity() {
             })
     }
 
-    fun saveScope(item: UserInfoDetailsItem, userInfo: UserProfileData?) {
+    fun saveScope(item: UserInfoDetailsItem, userInfo: UserProfileDataDto?) {
         val credentials = ApiUtils.getCredentials(currentUser!!.username, currentUser!!.token)
         ncApi.setUserData(
             credentials,

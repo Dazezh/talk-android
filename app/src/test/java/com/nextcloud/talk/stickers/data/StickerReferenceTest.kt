@@ -6,8 +6,8 @@
  */
 package com.nextcloud.talk.stickers.data
 
-import com.nextcloud.talk.models.json.opengraph.Reference
-import com.nextcloud.talk.models.json.opengraph.RichObject
+import com.nextcloud.talk.models.json.opengraph.ReferenceDto
+import com.nextcloud.talk.models.json.opengraph.RichObjectDto
 import com.nextcloud.talk.models.json.opengraph.RichObjectSticker
 import com.nextcloud.talk.utils.ApiUtils
 import org.junit.Assert.assertEquals
@@ -66,9 +66,9 @@ class StickerReferenceTest {
         accessible: Boolean?,
         imageUrl: String? = null,
         thumbnailUrl: String? = null
-    ) = Reference(
+    ) = ReferenceDto(
         richObjectType = richObjectType,
-        richObject = RichObject(
+        richObject = RichObjectDto(
             id = "bW9jaGljYXQ6MC53ZWJw",
             name = "Mochi Cat",
             sticker = RichObjectSticker(imageUrl = imageUrl, thumbnailUrl = thumbnailUrl)

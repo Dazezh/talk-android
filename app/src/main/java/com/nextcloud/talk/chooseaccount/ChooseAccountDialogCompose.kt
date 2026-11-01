@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,7 +65,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import autodagger.AutoInjector
 import coil.compose.AsyncImage
 import com.nextcloud.android.common.core.utils.ecosystem.EcosystemApp
@@ -81,20 +84,22 @@ import com.nextcloud.talk.chooseaccount.viewmodel.StatusUiState
 import com.nextcloud.talk.chooseaccount.viewmodel.StatusViewModel
 import com.nextcloud.talk.contacts.loadImage
 import com.nextcloud.talk.conversationlist.ConversationsListActivity
+import com.nextcloud.talk.dagger.modules.ViewModelFactoryWithParams
 import com.nextcloud.talk.data.network.NetworkMonitor
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.invitation.viewmodels.InvitationsViewModel
-import com.nextcloud.talk.models.json.status.Status
+import com.nextcloud.talk.models.json.status.StatusDto
 import com.nextcloud.talk.models.json.status.StatusType
 import com.nextcloud.talk.settings.SettingsActivity
 import com.nextcloud.talk.ui.StatusDrawable
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
+import com.nextcloud.talk.users.DefaultAccountProvider
 import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
 import com.nextcloud.talk.utils.DisplayUtils
 import com.nextcloud.talk.utils.bundle.BundleKeys
-import com.nextcloud.talk.utils.database.user.CurrentUserProviderOld
+import kotlinx.coroutines.launch
 import java.net.CookieManager
 import javax.inject.Inject
 
@@ -108,7 +113,7 @@ class ChooseAccountDialogCompose {
     lateinit var userManager: UserManager
 
     @Inject
-    lateinit var currentUserProvider: CurrentUserProviderOld
+    lateinit var defaultAccountProvider: DefaultAccountProvider
 
     @Inject
     lateinit var cookieManager: CookieManager
@@ -117,13 +122,13 @@ class ChooseAccountDialogCompose {
     lateinit var viewThemeUtils: ViewThemeUtils
 
     @Inject
-    lateinit var invitationsViewModel: InvitationsViewModel
+    lateinit var viewModelFactory: ViewModelProvider.Factory
 
     @Inject
-    lateinit var statusViewModel: StatusViewModel
+    lateinit var statusViewModelFactory: StatusViewModel.Factory
 
     @Inject
-    lateinit var statusMessageViewModel: StatusMessageViewModel
+    lateinit var statusMessageViewModelFactory: StatusMessageViewModel.Factory
 
     @Inject
     lateinit var networkMonitor: NetworkMonitor
@@ -136,22 +141,40 @@ class ChooseAccountDialogCompose {
     @Suppress("LongMethod")
     fun GetChooseAccountDialog(shouldDismiss: MutableState<Boolean>, activity: Activity, showEcosystem: Boolean) {
         if (shouldDismiss.value) return
+        val currentUser = defaultAccountProvider.getDefaultUserBlocking()!!
+        // Scoped to the hosting activity, so they survive configuration changes and are cleared with it. The status
+        // view models are bound to the default account, so they are keyed by it and replaced when the default account
+        // changes while the activity stays open.
+        val invitationsViewModel: InvitationsViewModel = viewModel(factory = viewModelFactory)
+        val statusViewModel: StatusViewModel = viewModel(
+            key = "status-${currentUser.id}",
+            factory = ViewModelFactoryWithParams(StatusViewModel::class.java) {
+                statusViewModelFactory.build(currentUser)
+            }
+        )
+        val statusMessageViewModel: StatusMessageViewModel = viewModel(
+            key = "statusMessage-${currentUser.id}",
+            factory = ViewModelFactoryWithParams(StatusMessageViewModel::class.java) {
+                statusMessageViewModelFactory.build(currentUser)
+            }
+        )
         val colorScheme = viewThemeUtils.getColorScheme(activity)
-        val status = remember { mutableStateOf<Status?>(null) }
+        val status = remember { mutableStateOf<StatusDto?>(null) }
         val showOnlineStatusSheet = rememberSaveable { mutableStateOf(false) }
         val showStatusMessageSheet = rememberSaveable { mutableStateOf(false) }
         val context = LocalContext.current
         val statusViewState by statusViewModel.statusViewState.collectAsStateWithLifecycle()
-        val invitationsState by invitationsViewModel.getInvitationsViewState.collectAsStateWithLifecycle()
+        val invitationsStateByUser by invitationsViewModel.invitationsStateByUser.collectAsStateWithLifecycle()
         val isOnline by networkMonitor.isOnline.collectAsStateWithLifecycle()
-        val currentUser = currentUserProvider.currentUser.blockingGet()!!
         val isStatusAvailable = CapabilitiesUtil.isUserStatusAvailable(currentUser)
         ecosystemManager = EcosystemManager(activity)
 
         LaunchedEffect(currentUser) {
-            val users = userManager.users.blockingGet()
+            val users = userManager.getUsers()
+            userItems.clear()
             users.forEach { user ->
                 if (!user.current) {
+                    addAccountToList(user, pendingInvitations = 0)
                     invitationsViewModel.getInvitations(user)
                 }
             }
@@ -159,9 +182,8 @@ class ChooseAccountDialogCompose {
                 statusViewModel.getStatus()
             }
         }
-        LaunchedEffect(invitationsState) {
-            userItems.clear()
-            setupAccounts(invitationsState)
+        LaunchedEffect(invitationsStateByUser) {
+            updatePendingInvitationCounts(invitationsStateByUser)
         }
         handleStatusState(statusViewState, status)
         MaterialTheme(colorScheme = colorScheme) {
@@ -187,7 +209,7 @@ class ChooseAccountDialogCompose {
                 },
                 onOpenSettingsClick = {
                     shouldDismiss.value = true
-                    openSettings(activity)
+                    openSettings(activity, currentUser)
                 },
                 onEcosystemFilesClick = {
                     shouldDismiss.value = true
@@ -235,16 +257,17 @@ class ChooseAccountDialogCompose {
         }
     }
 
-    private fun setupAccounts(invitationsUiState: InvitationsViewModel.ViewState) {
-        userManager.users.blockingGet().forEach { user ->
-            if (!user.current) {
-                val pendingCount = getPendingInvitations(invitationsUiState)
-                addAccountToList(user, pendingCount)
+    private fun updatePendingInvitationCounts(statesByUserId: Map<Long, InvitationsViewModel.ViewState>) {
+        statesByUserId.forEach { (userId, state) ->
+            val pendingCount = getPendingInvitations(state)
+            val index = userItems.indexOfFirst { it.user.id == userId }
+            if (index >= 0 && userItems[index].pendingInvitation != pendingCount) {
+                userItems[index] = userItems[index].copy(pendingInvitation = pendingCount)
             }
         }
     }
 
-    private fun handleStatusState(statusViewState: StatusUiState, status: MutableState<Status?>) {
+    private fun handleStatusState(statusViewState: StatusUiState, status: MutableState<StatusDto?>) {
         when (statusViewState) {
             is StatusUiState.Success -> {
                 status.value = statusViewState.status.ocs?.data!!
@@ -265,8 +288,9 @@ class ChooseAccountDialogCompose {
         activity.startActivity(intent)
     }
 
-    private fun openSettings(activity: Activity) {
+    private fun openSettings(activity: Activity, user: User) {
         val intent = Intent(activity, SettingsActivity::class.java)
+        intent.putExtra(BundleKeys.KEY_INTERNAL_USER_ID, user.id)
         activity.startActivity(intent)
     }
 
@@ -286,17 +310,20 @@ class ChooseAccountDialogCompose {
 
     @Composable
     private fun AccountRow(userItem: AccountItem, activity: Activity, onSelected: () -> Unit) {
+        val scope = rememberCoroutineScope()
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
-                    if (userManager.setUserAsActive(userItem.user).blockingGet()) {
-                        cookieManager.cookieStore.removeAll()
-                        val intent = Intent(activity, ConversationsListActivity::class.java)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                        activity.startActivity(intent)
-                        onSelected()
+                    scope.launch {
+                        if (userManager.setUserAsActive(userItem.user)) {
+                            cookieManager.cookieStore.removeAll()
+                            activity.startActivity(
+                                ConversationsListActivity.createAccountSwitchIntent(activity, userItem.user.id!!)
+                            )
+                            onSelected()
+                        }
                     }
                 }
                 .padding(8.dp)
@@ -353,7 +380,7 @@ class ChooseAccountDialogCompose {
         }
 
     @Composable
-    private fun StatusIndicator(modifier: Modifier = Modifier, status: Status?, context: Context) {
+    private fun StatusIndicator(modifier: Modifier = Modifier, status: StatusDto?, context: Context) {
         status?.let {
             val size = remember { DisplayUtils.convertDpToPixel(STATUS_SIZE_DP, context) }
             val drawable = remember(it) { StatusDrawable(it.status, it.icon, size, 0, context) }
@@ -383,7 +410,7 @@ private fun ChooseAccountDialogContent(
     shouldDismiss: MutableState<Boolean>,
     colorScheme: ColorScheme,
     currentUser: User,
-    status: Status?,
+    status: StatusDto?,
     isStatusAvailable: Boolean,
     isOnline: Boolean,
     accountItems: List<AccountItem>,
@@ -459,7 +486,7 @@ private fun ChooseAccountDialogContent(
 @Composable
 private fun CurrentUserSection(
     currentUser: User,
-    status: Status?,
+    status: StatusDto?,
     onCurrentUserClick: () -> Unit,
     colorScheme: ColorScheme,
     statusIndicator: @Composable (Modifier) -> Unit,
@@ -511,7 +538,7 @@ private fun UserAvatarWithStatus(currentUser: User, context: Context, statusIndi
 }
 
 @Composable
-private fun CurrentUserInfo(currentUser: User, status: Status?, modifier: Modifier = Modifier) {
+private fun CurrentUserInfo(currentUser: User, status: StatusDto?, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
         Text(text = currentUser.displayName ?: currentUser.username ?: "")
         status?.let {
@@ -699,7 +726,7 @@ private fun ChooseAccountDialogContentPreview() {
         baseUrl = "https://example.com",
         displayName = "Sample User"
     )
-    val sampleStatus = Status(
+    val sampleStatus = StatusDto(
         userId = "user1",
         message = "Working remotely",
         messageId = "message-id",

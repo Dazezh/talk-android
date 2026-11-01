@@ -6,6 +6,7 @@
  */
 package com.nextcloud.talk.mediaviewer.activities
 
+import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
 import android.util.Log
 import android.view.View
@@ -24,6 +25,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,7 +33,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -88,15 +90,15 @@ import com.nextcloud.talk.utils.DateConstants
 import com.nextcloud.talk.utils.DateUtils
 import com.nextcloud.talk.utils.DrawableUtils
 import com.nextcloud.talk.utils.Mimetype
-import com.nextcloud.talk.utils.MimetypeUtils
+import com.nextcloud.talk.ui.LocalImageAuthHeader
+import com.nextcloud.talk.ui.withAuthHeader
 import java.io.File
 import kotlinx.coroutines.launch
-import pl.droidsonroids.gif.GifDrawable
-import pl.droidsonroids.gif.GifImageView
 
 private const val TOOLBAR_ALPHA = 0.6f
 private const val MAX_SCALE = 6.0f
 private const val MEDIUM_SCALE = 2.45f
+private const val CONTROLLER_SHOW_TIMEOUT_MS = 2000
 
 private val thumbnailSize = 48.dp
 private val thumbnailSpacing = 4.dp
@@ -163,14 +165,13 @@ fun MediaViewerScreen(
     }
 
     // Tapping the currently shown item toggles this off, hiding the top bar and thumbnail strip so
-    // only the media itself is visible - mirrors FullScreenMediaScreen's own tap-to-toggle-fullscreen
-    // behavior (still used for audio). For video, ExoPlayer's own controller visibility is the
+    // only the media itself is visible. For video, ExoPlayer's own controller visibility is the
     // source of truth (see VideoPlayerView) rather than an independently toggled flag, since the
     // controller already auto-hides itself after a timeout.
     var showControls by remember { mutableStateOf(true) }
 
     // The status/nav bars toggle together with the top bar and thumbnail strip - one tap hides all
-    // of it, matching FullScreenMediaScreen's own tap-to-toggle-fullscreen.
+    // of it.
     LaunchedEffect(showControls) {
         onControlsVisibilityChanged(showControls)
     }
@@ -305,7 +306,6 @@ private fun MediaPage(
     controllerExtraBottomInsetPx: Int
 ) {
     val isVideo = item.mimeType.startsWith(Mimetype.VIDEO_PREFIX)
-    val isGif = MimetypeUtils.isGif(item.mimeType)
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
@@ -319,7 +319,6 @@ private fun MediaPage(
             } else {
                 PreviewPlaceholder(item, onToggleControls = onToggleControls)
             }
-            isGif -> GifPage(localPath = localPath, onToggleControls = onToggleControls)
             else -> ImagePage(localPath = localPath, onToggleControls = onToggleControls)
         }
     }
@@ -329,25 +328,15 @@ private fun MediaPage(
 private fun PreviewPlaceholder(item: MediaViewerItem, onToggleControls: () -> Unit) {
     if (item.previewUrl != null) {
         AsyncImage(
-            model = item.previewUrl,
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(item.previewUrl)
+                .withAuthHeader(LocalImageAuthHeader.current)
+                .build(),
             contentDescription = item.fileName,
             modifier = Modifier.fillMaxSize().clickable(onClick = onToggleControls),
             contentScale = ContentScale.Fit
         )
     }
-}
-
-@Composable
-private fun GifPage(localPath: String, onToggleControls: () -> Unit) {
-    AndroidView(
-        factory = { ctx ->
-            GifImageView(ctx).apply {
-                setImageDrawable(GifDrawable(localPath))
-                setOnClickListener { onToggleControls() }
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    )
 }
 
 @Composable
@@ -378,18 +367,24 @@ private fun ImagePage(localPath: String, onToggleControls: () -> Unit) {
                 setOnOutsidePhotoTapListener { onToggleControls() }
             }
         },
-        update = { photoView -> drawable?.let { photoView.setImageDrawable(it) } },
+        update = { photoView ->
+            drawable?.let {
+                photoView.setImageDrawable(it)
+                // Animated images (GIF, animated WebP/HEIF) decoded by Coil are not started automatically
+                (it as? Animatable)?.start()
+            }
+        },
+        onRelease = { photoView -> (photoView.drawable as? Animatable)?.stop() },
         modifier = Modifier.fillMaxSize()
     )
 }
 
 // Pushes ExoPlayer's own controller (progress bar, play/pause row) up by extraBottomInsetPx (the
 // thumbnail strip's height, when one is showing for the current group) on top of the system nav
-// bar inset, same technique FullScreenMediaScreen's MediaPlayerView already uses to keep the
-// controller clear of the nav bar - so the controller never renders underneath the strip instead
-// of shrinking the video content itself, which would visibly resize the video on every
-// show/hide-controls tap.
+// bar inset, so the controller never renders underneath the strip instead of shrinking the video
+// content itself, which would visibly resize the video on every show/hide-controls tap.
 @OptIn(UnstableApi::class)
+@kotlin.OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun VideoPlayerView(
     exoPlayer: ExoPlayer,
@@ -398,9 +393,13 @@ private fun VideoPlayerView(
 ) {
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
-    val systemBarsBottomPx = WindowInsets.systemBars.getBottom(density)
-    val leftPx = WindowInsets.systemBars.getLeft(density, layoutDirection)
-    val rightPx = WindowInsets.systemBars.getRight(density, layoutDirection)
+    // Deliberately "IgnoringVisibility": the plain systemBars value animates across many frames
+    // while we hide/show the bars (see enterImmersiveMode/exitImmersiveMode), and reapplying
+    // these margins on every one of those frames was fighting the ExoPlayer controller's own
+    // hide animation, flipping it back to visible mid-fade and looping forever.
+    val systemBarsBottomPx = WindowInsets.systemBarsIgnoringVisibility.getBottom(density)
+    val leftPx = WindowInsets.systemBarsIgnoringVisibility.getLeft(density, layoutDirection)
+    val rightPx = WindowInsets.systemBarsIgnoringVisibility.getRight(density, layoutDirection)
     val bottomPx = systemBarsBottomPx + extraBottomInsetPx
     val originalProgressMarginBottom = remember { intArrayOf(-1) }
 
@@ -409,6 +408,7 @@ private fun VideoPlayerView(
             PlayerView(ctx).apply {
                 player = exoPlayer
                 useController = true
+                controllerShowTimeoutMs = CONTROLLER_SHOW_TIMEOUT_MS
                 showController()
                 setControllerVisibilityListener(
                     PlayerView.ControllerVisibilityListener { visibility ->
@@ -507,7 +507,10 @@ private fun ThumbnailTile(item: MediaViewerItem, isSelected: Boolean, onClick: (
     ) {
         if (item.previewUrl != null) {
             AsyncImage(
-                model = item.previewUrl,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(item.previewUrl)
+                    .withAuthHeader(LocalImageAuthHeader.current)
+                    .build(),
                 contentDescription = item.fileName,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
