@@ -113,6 +113,7 @@ private const val HALF_OPACITY = 127
 private const val MESSAGE_LENGTH_THRESHOLD = 25
 private const val ANIMATED_BLINK = 500
 private const val MESSAGE_BUBBLE_MAX_WIDTH_FRACTION = 0.8f
+private const val QUOTE_MAX_LINES = 2
 private const val IN_BUBBLE_META_ALPHA = 0.72f
 private const val QUOTE_CONTAINER_ALPHA = 0.12f
 
@@ -958,7 +959,7 @@ private fun QuoteTextContent(message: ChatMessageUi, onClick: () -> Unit) {
                 color = if (outgoing) colorScheme.onPrimaryContainer else colorScheme.onSurface,
                 lineHeight = fontSize * LINE_SPACING
             ),
-            maxLines = 4,
+            maxLines = QUOTE_MAX_LINES,
             enableMentionClicks = false,
             enableLinks = false,
             onDisabledMentionClick = onClick

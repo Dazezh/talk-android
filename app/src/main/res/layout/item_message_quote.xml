@@ -67,7 +67,7 @@
             android:layout_alignStart="@id/quotedMessageAuthor"
             android:ellipsize="end"
             android:lineSpacingMultiplier="1.2"
-            android:maxLines="4"
+            android:maxLines="2"
             android:textAlignment="viewStart"
             android:textColor="@color/high_emphasis_text"
             android:textIsSelectable="false"
