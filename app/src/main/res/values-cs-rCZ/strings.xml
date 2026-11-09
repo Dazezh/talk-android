@@ -789,59 +789,33 @@
         <item quantity="other">%d hlasy</item>
     </plurals>
     <string name="call_in_progress">Hovor právě probíhá</string>
-    
     <string name="chat_messages_load_gap">Některé zprávy se nepodařilo načíst</string>
-    
     <string name="mention_open_chat_with">Otevřít chat s %1$s</string>
-    
     <string name="message_search_no_more_results">Žádné další zprávy</string>
-    
     <string name="nc_add_to_home_screen">Přidat na domovskou obrazovku</string>
-    
     <string name="nc_call_button_content_description_switch_camera">Přepnout kameru</string>
-    
     <string name="nc_call_e2ee_not_supported_title">Hovor od %s není k dispozici</string>
-    
     <string name="nc_call_join_failed">Nepodařilo se připojit do hovoru. Zkuste prosím znovu.</string>
-    
     <string name="nc_call_ongoing_notification_return_action">Vrátit se k hovoru</string>
-    
     <string name="nc_chat_no_messages">Zatím žádné zprávy. Pozdravte jako první!</string>
-    
     <string name="nc_classified_conversation">Utajovaná konverzace</string>
-    
     <string name="nc_compress_notification_text">%1$s - %2$s\%%</string>
-    
     <string name="nc_conversation_created_invalid_participants_named">Nepodařilo se přidat účastníky: %1$s</string>
-    
     <string name="nc_conversation_created_title">Konverzace byla vytvořena</string>
-    
     <string name="nc_conversation_tags_delete_confirm_title">Smazat štítek?</string>
-    
     <string name="nc_hq_toggle_description">Vysoká kvalita, bez komprese</string>
-    
     <string name="nc_logs_share">Odeslat jako e-mail</string>
-    
     <string name="nc_media_quality_original">Původní kvalita</string>
-    
     <string name="nc_media_quality_reduced">Snížená kvalita</string>
-    
     <string name="nc_notification_channel_calls_ongoing">Probíhající hovor</string>
-    
     <string name="nc_password_secure">Heslo je bezpečné</string>
-    
-    
     <string name="nc_reply_to_thread">Odpovědět na vlákno: %1$s</string>
-    
     <string name="nc_settings_media_quality_title">Kvalita odeslaných médií</string>
-    
     <string name="nc_take_video">Natočit video</string>
-    
     <plurals name="nc_new_messages_count">
         <item quantity="one">%dnová zpráva</item>
         <item quantity="few">%dnové zprávy</item>
         <item quantity="many">%dnových zpráv</item>
         <item quantity="other">%dnových zpráv</item>
     </plurals>
-    
 </resources>

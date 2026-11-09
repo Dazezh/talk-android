@@ -908,15 +908,9 @@
         <item quantity="other">%d oy</item>
     </plurals>
     <string name="nc_call_button_content_description_switch_camera">Kamerayı değiştir</string>
-    
     <string name="nc_call_self_video_enlarge">Görüntümü büyüt</string>
-    
     <string name="nc_call_self_video_shrink">Görüntümü küçült</string>
-    
     <string name="nc_login_too_many_attempts">Bu ağdan çok sayıda başarısız oturum açma denemesi yapıldı. Bir süre sonra yeniden deneyin.</string>
-    
     <string name="nc_message_not_added_to_notes">İleti notlara eklenemedi</string>
-    
     <string name="nc_reauthorize_different_account">Farklı bir hesapla oturum açtınız. Yeniden yetki vermek istediğiniz hesap ile oturum açın.</string>
-    
 </resources>

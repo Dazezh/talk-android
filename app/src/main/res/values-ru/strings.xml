@@ -888,150 +888,72 @@
         <item quantity="other">%d голосов</item>
     </plurals>
     <string name="error_crash_description">Приложение неожиданно завершилось сбоем. Помогите исправить: отправьте отчёт о сбое через меню.</string>
-    
     <string name="error_crash_please_describe">Опишите проблему (как воспроизвести ошибку или сбой?)</string>
-    
     <string name="nc_admin_only">Только для администраторов</string>
-    
     <string name="nc_announcement_description">Обсуждение, в котором администраторы оповещают постоянную аудиторию; покинуть его нельзя.</string>
-    
     <string name="nc_call_button_content_description_switch_camera">Переключить камеру</string>
-    
-    
-    
-    
-    
-    
-    
     <string name="nc_channel_description">Писать могут только модераторы, остальные могут только реагировать</string>
-    
     <string name="nc_classified_conversation_description">Закрытое обсуждение для конфиденциальных тем: публичный доступ, гости, SIP и записи отключены</string>
-    
     <string name="nc_close_video_playback">Закрыть воспроизведение видео</string>
-    
     <string name="nc_compress_images">Сжимать изображения и видео</string>
-    
     <string name="nc_compress_in_progress">Сжатие</string>
-    
     <string name="nc_compress_notification_text">%1$s - %2$s\%%</string>
-    
     <string name="nc_conversation_created_invalid_participants">Не удалось добавить некоторых участников</string>
-    
     <string name="nc_conversation_created_invalid_participants_named">Не удалось добавить этих участников: %1$s</string>
-    
     <string name="nc_conversation_created_public">Гости могут присоединиться к обсуждению по ссылке. Поделитесь ею сейчас или позже в настройках обсуждения.</string>
-    
     <string name="nc_conversation_created_title">Обсуждение создано</string>
-    
     <string name="nc_conversation_tags_delete_confirm_message">Эта метка будет удалена из всех обсуждений, к которым она привязана.</string>
-    
     <string name="nc_conversation_tags_delete_confirm_title">Удалить метку?</string>
-    
     <string name="nc_conversation_tags_error_generic">Что-то пошло не так, попробуйте ещё раз</string>
-    
     <string name="nc_conversation_tags_error_limit">Достигнуто максимальное число меток</string>
-    
     <string name="nc_conversation_tags_error_name">Недопустимое название метки, либо оно уже используется</string>
-    
     <string name="nc_conversation_type_defaults">Настройки по умолчанию для этого типа обсуждения:</string>
-    
     <string name="nc_conversation_type_defaults_hint">Эти настройки можно изменить после создания обсуждения</string>
-    
     <string name="nc_conversation_type_lobby">Лобби включено: в обсуждение могут войти только модераторы</string>
-    
     <string name="nc_conversation_type_mentions_moderators">Упоминать всех могут только модераторы</string>
-    
     <string name="nc_conversation_type_message_expiration">Срок хранения сообщений: %1$s</string>
-    
     <string name="nc_conversation_type_message_expiration_custom">Включено удаление сообщений по сроку</string>
-    
     <string name="nc_conversation_type_sip">Включён вход по телефону и SIP</string>
-    
     <string name="nc_conversation_type_sip_no_pin">Разрешён вход без PIN-кода</string>
-    
     <string name="nc_conversation_types_error">Не удалось загрузить типы обсуждений</string>
-    
     <string name="nc_hq_toggle">HQ</string>
-    
     <string name="nc_hq_toggle_description">Высокое качество, без сжатия</string>
-    
     <string name="nc_login_too_many_attempts">Слишком много неудачных попыток входа из этой сети. Повторите попытку позже.</string>
-    
     <string name="nc_logs_advanced_logging">Расширенное ведение журнала</string>
-    
     <string name="nc_logs_advanced_logging_disable">Отключить расширенное ведение журнала</string>
-    
     <string name="nc_logs_advanced_logging_enable">Включить расширенное ведение журнала</string>
-    
     <string name="nc_logs_advanced_logging_enabled_warning">Расширенное ведение журнала включено. Это может замедлить работу.</string>
-    
     <string name="nc_logs_advanced_logging_privacy_warning">Если вы включали расширенное ведение журнала, не публикуйте отчёт в открытом доступе.</string>
-    
     <string name="nc_logs_delete_all">Удалить все журналы</string>
-    
     <string name="nc_logs_disable_dialog_message">Удалить также существующие файлы журнала?</string>
-    
     <string name="nc_logs_disable_dialog_title">Отключить ведение журнала</string>
-    
     <string name="nc_logs_disable_keep">Оставить журналы</string>
-    
     <string name="nc_logs_download_zip">Скачать в формате ZIP</string>
-    
     <string name="nc_logs_empty">Записей журнала не найдено.</string>
-    
     <string name="nc_logs_logging_disabled_note">Ведение журнала отключено. Журналы на диск не записываются.</string>
-    
     <string name="nc_logs_logging_enabled">Ведение журнала включено</string>
-    
     <string name="nc_logs_overflow_warning">Внимание: часть записей журнала потеряна из-за переполнения очереди.</string>
-    
     <string name="nc_logs_share">Отправить по почте</string>
-    
-    
-    
     <string name="nc_logs_share_subject">Журналы %1$s</string>
-    
     <string name="nc_logs_total_size">Общий размер журналов: %d КБ</string>
-    
     <string name="nc_message_not_added_to_notes">Не удалось добавить сообщение в заметки</string>
-    
     <string name="nc_notification_channel_calls_ongoing">Текущий вызов</string>
-    
     <string name="nc_notification_channel_calls_ongoing_description">Постоянный статус идущего вызова</string>
-    
     <string name="nc_notification_permission_hint">Чтобы показывать уведомления о вызовах и не прерывать вызовы в фоновом режиме, предоставьте разрешение «Уведомления».</string>
-    
     <string name="nc_password_copied">Пароль скопирован</string>
-    
     <string name="nc_password_required">Для обсуждений, к которым могут присоединяться гости, сервер требует пароль</string>
-    
     <string name="nc_password_secure">Пароль надёжный</string>
-    
     <string name="nc_presentation_description">Ограниченное обсуждение для внутренних презентаций</string>
-    
     <string name="nc_reauthorize_different_account">Вы вошли в другую учётную запись. Войдите в ту, которую нужно авторизовать повторно.</string>
-    
     <string name="nc_remote_wipe_logged_out">Данные для входа в эту учётную запись больше не действительны</string>
-    
     <string name="nc_settings_diagnosis_logs_section_title">Диагностика и журналы</string>
-    
     <string name="nc_settings_diagnosis_subtitle">Открыть экран диагностики для проверки настроек</string>
-    
     <string name="nc_settings_logs_subtitle">Просмотр локальных файлов журнала</string>
-    
     <string name="nc_settings_share_report_subtitle">Поделиться журналами и данными диагностики</string>
-    
     <string name="nc_settings_share_report_title">Поделиться отчётом диагностики</string>
-    
-    
     <string name="nc_webinar_description">Ограниченное обсуждение с включённым лобби — подходит для открытых вебинаров</string>
-    
     <string name="play_pause_audio_file">Воспроизведение/пауза аудиофайла</string>
-    
     <string name="reaction_add_failed">Не удалось добавить реакцию</string>
-    
     <string name="reaction_delete_failed">Не удалось удалить реакцию</string>
-    
     <string name="thread">Тема</string>
-    
 </resources>
