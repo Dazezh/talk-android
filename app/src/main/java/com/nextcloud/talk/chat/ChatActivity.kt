@@ -24,10 +24,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.AssetFileDescriptor
 import android.database.Cursor
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.InsetDrawable
-import android.graphics.drawable.LayerDrawable
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -168,6 +165,7 @@ import com.nextcloud.talk.ui.ConversationDeleteNoticeViewData
 import com.nextcloud.talk.ui.OutOfOfficeView
 import com.nextcloud.talk.ui.OutOfOfficeViewData
 import com.nextcloud.talk.chat.wallpaper.ChatWallpaperRepository
+import com.nextcloud.talk.chat.wallpaper.WallpaperBackgroundDrawable
 import com.nextcloud.talk.chat.wallpaper.buildWallpaperDrawable
 import com.nextcloud.talk.ui.PinnedMessageView
 import com.nextcloud.talk.ui.PlaybackSpeed
@@ -827,27 +825,18 @@ class ChatActivity :
     }
 
     /**
-     * The chat container is padded by the status bar and the display cutout, and its background is
-     * painted behind that padding as well. The wallpaper is therefore inset by the current padding and
-     * the strip above the toolbar takes the toolbar colour, so no picture shows around a camera cutout.
+     * The chat container is padded by the status bar and the display cutout, so the wallpaper only
+     * covers the content area and the padding takes the toolbar colour. The drawable reads the
+     * padding while drawing, because the insets arrive after the picture was loaded.
      */
     private fun applyWallpaperBackground() {
         val wallpaper = chatWallpaper ?: return
-        val host = binding.chatContainer
-        val left = host.paddingLeft
-        val top = host.paddingTop
-        val right = host.paddingRight
 
-        host.background = if (left == 0 && top == 0 && right == 0) {
-            wallpaper
-        } else {
-            LayerDrawable(
-                arrayOf(
-                    ColorDrawable(viewThemeUtils.getColorScheme(this).surface.toArgb()),
-                    InsetDrawable(wallpaper, left, top, right, 0)
-                )
-            )
-        }
+        binding.chatContainer.background = WallpaperBackgroundDrawable(
+            wallpaper = wallpaper,
+            edgeColor = viewThemeUtils.getColorScheme(this).surface.toArgb(),
+            host = binding.chatContainer
+        )
     }
 
     private suspend fun loadWallpaperDrawable(wallpaperPath: String): Drawable? {

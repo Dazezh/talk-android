@@ -19,6 +19,7 @@ import android.graphics.Shader
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
+import android.view.View
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
@@ -110,6 +111,41 @@ private class CenterCropDrawable(private val bitmap: Bitmap) : Drawable() {
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
         paint.colorFilter = colorFilter
+    }
+
+    @Deprecated("Deprecated in Drawable", ReplaceWith("PixelFormat.TRANSLUCENT"))
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+/**
+ * Paints the wallpaper inside the padding of [host] and fills the padding itself with [edgeColor].
+ *
+ * The insets that push the chat content below the status bar and the display cutout arrive after the
+ * wallpaper is loaded, so the drawing has to read the padding every time instead of baking it into
+ * the drawable: otherwise a strip of the picture stays visible around a camera cutout.
+ */
+class WallpaperBackgroundDrawable(private val wallpaper: Drawable, private val edgeColor: Int, private val host: View) :
+    Drawable() {
+    private val paint = Paint()
+
+    override fun draw(canvas: Canvas) {
+        val left = bounds.left + host.paddingLeft
+        val top = bounds.top + host.paddingTop
+        val right = bounds.right - host.paddingRight
+
+        paint.color = edgeColor
+        canvas.drawRect(bounds, paint)
+
+        wallpaper.setBounds(left, top, right, bounds.bottom)
+        wallpaper.draw(canvas)
+    }
+
+    override fun setAlpha(alpha: Int) {
+        wallpaper.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        wallpaper.colorFilter = colorFilter
     }
 
     @Deprecated("Deprecated in Drawable", ReplaceWith("PixelFormat.TRANSLUCENT"))

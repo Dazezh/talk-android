@@ -171,11 +171,7 @@ fun PinnedMessageView(
         shape = if (angularInterface) RectangleShape else RoundedCornerShape(roundedCornerRadius),
         colors = CardDefaults.cardColors(containerColor = colorScheme.surface)
     ) {
-        // The angular bar is edge to edge, so it needs the same hairline against the toolbar that the
-        // other panels use. The rounded card floats and does not touch the toolbar.
-        if (angularInterface) {
-            PanelDivider()
-        }
+        PinnedHairline(visible = angularInterface)
         Row(modifier = Modifier.padding(start = 12.dp, end = 0.dp)) {
             Icon(
                 imageVector = ImageVector.vectorResource(R.drawable.outline_push_pin_24),
@@ -249,6 +245,17 @@ fun PinnedMessageView(
                 }
             }
         }
+    }
+}
+
+/**
+ * The angular bar is edge to edge, so it needs the same hairline against the toolbar that the other
+ * panels use. The rounded card floats and does not touch the toolbar.
+ */
+@Composable
+private fun PinnedHairline(visible: Boolean) {
+    if (visible) {
+        PanelDivider()
     }
 }
 
