@@ -671,6 +671,9 @@ class ChatActivity :
                     0
                 )
                 binding.fragmentContainerActivityChat.setPadding(0, 0, 0, bottomPadding)
+                // The wallpaper is cut out for the status bar and the display cutout, so it has to
+                // follow every inset change, not only the one seen when the picture was loaded.
+                applyWallpaperBackground()
                 WindowInsetsCompat.CONSUMED
             }
         } else {
@@ -805,6 +808,8 @@ class ChatActivity :
         binding.pinnedMessageContainer.setPadding(horizontal, vertical, horizontal, vertical)
     }
 
+    private var chatWallpaper: Drawable? = null
+
     private var chatListState: LazyListState? = null
 
     /**
@@ -814,35 +819,32 @@ class ChatActivity :
      */
     private fun applyChatWallpaper() {
         val wallpaperPath = RalkAppearancePreferences(this).wallpaperPath ?: return
-        val host: View = binding.chatContainer
 
         lifecycleScope.launch {
-            val drawable = loadWallpaperDrawable(wallpaperPath) ?: return@launch
-            host.background = wallpaperBackground(drawable)
+            chatWallpaper = loadWallpaperDrawable(wallpaperPath) ?: return@launch
+            applyWallpaperBackground()
         }
     }
 
     /**
      * The chat container is padded by the status bar and the display cutout, and its background is
-     * painted behind that padding as well. The wallpaper is therefore inset by those insets, so the
-     * strip above the toolbar takes the toolbar colour instead of showing the picture.
+     * painted behind that padding as well. The wallpaper is therefore inset by the current padding and
+     * the strip above the toolbar takes the toolbar colour, so no picture shows around a camera cutout.
      */
-    private fun wallpaperBackground(wallpaper: Drawable): Drawable {
-        val insets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            ViewCompat.getRootWindowInsets(binding.chatContainer)?.getInsets(
-                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
-            )
-        } else {
-            null
-        }
+    private fun applyWallpaperBackground() {
+        val wallpaper = chatWallpaper ?: return
+        val host = binding.chatContainer
+        val left = host.paddingLeft
+        val top = host.paddingTop
+        val right = host.paddingRight
 
-        return if (insets == null || (insets.top == 0 && insets.left == 0 && insets.right == 0)) {
+        host.background = if (left == 0 && top == 0 && right == 0) {
             wallpaper
         } else {
             LayerDrawable(
                 arrayOf(
                     ColorDrawable(viewThemeUtils.getColorScheme(this).surface.toArgb()),
-                    InsetDrawable(wallpaper, insets.left, insets.top, insets.right, 0)
+                    InsetDrawable(wallpaper, left, top, right, 0)
                 )
             )
         }

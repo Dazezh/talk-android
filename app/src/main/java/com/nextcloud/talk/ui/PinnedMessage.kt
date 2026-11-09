@@ -46,7 +46,6 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toDp
 import com.nextcloud.talk.R
 import com.nextcloud.talk.chat.data.model.ChatMessage
 import com.nextcloud.talk.chat.ui.model.ChatMessageUi
@@ -59,6 +58,7 @@ import com.nextcloud.talk.models.json.conversations.ConversationEnums
 import com.nextcloud.talk.models.json.participants.ParticipantDto
 import com.nextcloud.talk.ui.chat.MarkdownText
 import com.nextcloud.talk.ui.theme.LocalViewThemeUtils
+import com.nextcloud.talk.ui.theme.PanelDivider
 import com.nextcloud.talk.ui.theme.ViewThemeUtils
 import com.nextcloud.talk.utils.ConversationUtils
 import com.nextcloud.talk.utils.preview.ComposePreviewUtils
@@ -171,6 +171,11 @@ fun PinnedMessageView(
         shape = if (angularInterface) RectangleShape else RoundedCornerShape(roundedCornerRadius),
         colors = CardDefaults.cardColors(containerColor = colorScheme.surface)
     ) {
+        // The angular bar is edge to edge, so it needs the same hairline against the toolbar that the
+        // other panels use. The rounded card floats and does not touch the toolbar.
+        if (angularInterface) {
+            PanelDivider()
+        }
         Row(modifier = Modifier.padding(start = 12.dp, end = 0.dp)) {
             Icon(
                 imageVector = ImageVector.vectorResource(R.drawable.outline_push_pin_24),
