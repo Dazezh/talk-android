@@ -102,10 +102,10 @@ How to translate with transifex:
 
     <!-- Settings -->
     <string name="nc_settings_advanced_title">Advanced</string>
-    <string name="nc_settings_message_input_rectangular_title">Поле ввода прямоугольное</string>
+    <string name="nc_settings_angular_interface_title">Angular interface</string>
     <string name="nc_settings_chat_settings_title">Chat settings</string>
     <string name="nc_settings_chat_settings_summary">Input field, stickers, wallpaper, accent colour</string>
-    <string name="nc_chat_settings_restart_hint">Changing the appearance settings will restart the app</string>
+    <string name="nc_chat_settings_restart_hint">Changing the accent colour will restart the app</string>
     <string name="nc_chat_settings_input_section">Input field</string>
     <string name="nc_chat_settings_accent_section">Accent colour</string>
     <string name="nc_chat_settings_stickers_section">Stickers</string>

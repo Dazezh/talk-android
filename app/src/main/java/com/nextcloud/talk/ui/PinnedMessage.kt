@@ -37,13 +37,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toDp
 import com.nextcloud.talk.R
 import com.nextcloud.talk.chat.data.model.ChatMessage
 import com.nextcloud.talk.chat.ui.model.ChatMessageUi
@@ -65,7 +68,6 @@ import java.time.format.DateTimeFormatter
 
 private val pinnedIconSize = 20.dp
 private val pinnedPreviewMaxHeight = 80.dp
-private val pinnedCornerRadius = 12.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Suppress("LongMethod", "LongParameterList")
@@ -77,7 +79,8 @@ fun PinnedMessageView(
     currentConversation: ConversationModel?,
     scrollToMessageWithIdWithOffset: (String) -> Unit,
     hidePinnedMessage: (ChatMessage) -> Unit,
-    unPinMessage: (ChatMessage) -> Unit
+    unPinMessage: (ChatMessage) -> Unit,
+    angularInterface: Boolean = false
 ) {
     message.incoming = true
 
@@ -99,6 +102,10 @@ fun PinnedMessageView(
     val scrollState = rememberScrollState()
 
     val colorScheme = remember { viewThemeUtils.getColorScheme(context) }
+    // The rounded interface keeps the bar in step with the rounded input field: same radius.
+    val roundedCornerRadius = with(LocalDensity.current) {
+        context.resources.getDimension(R.dimen.button_corner_radius).toDp()
+    }
 
     val messageUi = remember(message, user) {
         ChatMessageUi(
@@ -161,7 +168,7 @@ fun PinnedMessageView(
                 onClick = { scrollToMessageWithIdWithOffset(message.jsonMessageId.toString()) },
                 onLongClick = { expanded = true }
             ),
-        shape = RoundedCornerShape(pinnedCornerRadius),
+        shape = if (angularInterface) RectangleShape else RoundedCornerShape(roundedCornerRadius),
         colors = CardDefaults.cardColors(containerColor = colorScheme.surface)
     ) {
         Row(modifier = Modifier.padding(start = 12.dp, end = 0.dp)) {

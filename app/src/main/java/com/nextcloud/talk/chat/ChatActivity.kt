@@ -24,7 +24,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.AssetFileDescriptor
 import android.database.Cursor
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.InsetDrawable
+import android.graphics.drawable.LayerDrawable
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -765,6 +768,7 @@ class ChatActivity :
     }
 
     private fun setPinnedMessageContent() {
+        applyPinnedMessageStyle()
         binding.pinnedMessageComposeView.setContent {
             MaterialTheme(colorScheme = viewThemeUtils.getColorScheme(this@ChatActivity)) {
                 CompositionLocalProvider(LocalViewThemeUtils provides viewThemeUtils) {
@@ -781,12 +785,24 @@ class ChatActivity :
                                 chatViewModel.jumpToQuotedMessage(messageId.toLong())
                             },
                             hidePinnedMessage = ::hidePinnedMessage,
-                            unPinMessage = ::unPinMessage
+                            unPinMessage = ::unPinMessage,
+                            angularInterface = appPreferences.messageInputRectangular
                         )
                     }
                 }
             }
         }
+    }
+
+    /**
+     * The pinned bar follows the interface shape: inset and rounded like the input field, or edge to
+     * edge and flat in the angular interface.
+     */
+    private fun applyPinnedMessageStyle() {
+        val angular = appPreferences.messageInputRectangular
+        val horizontal = if (angular) 0 else resources.getDimensionPixelSize(R.dimen.standard_half_margin)
+        val vertical = if (angular) 0 else resources.getDimensionPixelSize(R.dimen.standard_quarter_margin)
+        binding.pinnedMessageContainer.setPadding(horizontal, vertical, horizontal, vertical)
     }
 
     private var chatListState: LazyListState? = null
@@ -802,7 +818,33 @@ class ChatActivity :
 
         lifecycleScope.launch {
             val drawable = loadWallpaperDrawable(wallpaperPath) ?: return@launch
-            host.background = drawable
+            host.background = wallpaperBackground(drawable)
+        }
+    }
+
+    /**
+     * The chat container is padded by the status bar and the display cutout, and its background is
+     * painted behind that padding as well. The wallpaper is therefore inset by those insets, so the
+     * strip above the toolbar takes the toolbar colour instead of showing the picture.
+     */
+    private fun wallpaperBackground(wallpaper: Drawable): Drawable {
+        val insets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            ViewCompat.getRootWindowInsets(binding.chatContainer)?.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+        } else {
+            null
+        }
+
+        return if (insets == null || (insets.top == 0 && insets.left == 0 && insets.right == 0)) {
+            wallpaper
+        } else {
+            LayerDrawable(
+                arrayOf(
+                    ColorDrawable(viewThemeUtils.getColorScheme(this).surface.toArgb()),
+                    InsetDrawable(wallpaper, insets.left, insets.top, insets.right, 0)
+                )
+            )
         }
     }
 

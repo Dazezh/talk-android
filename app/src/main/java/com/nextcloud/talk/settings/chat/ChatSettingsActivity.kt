@@ -316,17 +316,10 @@ private fun ChatSettingsScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        Text(
-            text = stringResource(R.string.nc_chat_settings_restart_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = tilePadding, top = 12.dp, end = tilePadding)
-        )
-
         SectionTitle(textRes = R.string.nc_chat_settings_input_section)
 
         SwitchRow(
-            title = stringResource(R.string.nc_settings_message_input_rectangular_title),
+            title = stringResource(R.string.nc_settings_angular_interface_title),
             checked = state.rectangularInput,
             onCheckedChange = callbacks.onRectangularInputChange
         )
@@ -338,6 +331,13 @@ private fun ChatSettingsScreen(
         SectionTitle(textRes = R.string.nc_chat_settings_accent_section)
 
         AccentRow(selectedAccent = state.accentSeed, onAccentSelected = callbacks.onAccentSelected)
+
+        Text(
+            text = stringResource(R.string.nc_chat_settings_restart_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = tilePadding, top = 4.dp, end = tilePadding)
+        )
 
         SectionTitle(textRes = R.string.nc_chat_settings_wallpaper_section)
 

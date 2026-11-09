@@ -536,7 +536,8 @@
     <string name="nc_settings_appearance">Внешний вид</string>
     <string name="nc_settings_chat_settings_title">Настройки чата</string>
     <string name="nc_settings_chat_settings_summary">Поле ввода, стикеры, обои, акцент</string>
-    <string name="nc_chat_settings_restart_hint">Изменение настроек внешнего вида приведёт к перезапуску приложения</string>
+    <string name="nc_settings_angular_interface_title">Угловатый интерфейс</string>
+    <string name="nc_chat_settings_restart_hint">Изменение акцентного цвета приведёт к перезапуску приложения</string>
     <string name="nc_chat_settings_input_section">Поле ввода</string>
     <string name="nc_chat_settings_accent_section">Акцентный цвет</string>
     <string name="nc_chat_settings_stickers_section">Стикеры</string>
