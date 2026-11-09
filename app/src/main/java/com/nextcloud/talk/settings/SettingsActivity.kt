@@ -1534,6 +1534,7 @@ class SettingsActivity :
                 if (newBoolean != state) {
                     state = newBoolean
                     binding.settingsScreenLockTimeout.isEnabled = newBoolean
+                    binding.settingsScreenLockTimeoutLayoutDropdown.isEnabled = newBoolean
                     if (newBoolean) {
                         binding.settingsScreenLockTimeout.alpha = ENABLED_ALPHA
                     } else {

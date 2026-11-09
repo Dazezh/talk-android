@@ -87,9 +87,7 @@
     <string name="load_more_results">Načíst další výsledky</string>
     <string name="local_time">Místní čas: %1$s</string>
     <string name="location_permission_denied">Oprávnění k přístupu k poloze odepřeno</string>
-    <string name="location_permission_denied_msg">Povolte to v nastavení aplikace</string>
     <string name="location_services_disabled">Služby určování polohy vypnuty</string>
-    <string name="location_services_disabled_msg">Abyste mohli používat tuto funkci zapněte polohové služby (GPS)</string>
     <string name="lock_conversation">Uzamknout konverzaci</string>
     <string name="lock_symbol">Symbol zámku</string>
     <string name="lower_hand">Přestat se hlásit</string>
@@ -107,8 +105,6 @@
     <string name="message_deleted_by_you">Zprávu jste smazali</string>
     <string name="message_last_edited_by">Upraveno %1$s</string>
     <string name="message_poll_tap_to_open">Klepnutím anketu otevřete</string>
-    <string name="message_search_begin_empty">Nic nenalezeno</string>
-    <string name="message_search_begin_typing">Hledejte psaním …</string>
     <string name="message_search_hint">Hledat …</string>
     <string name="messages">Zprávy</string>
     <string name="mute_all_notifications">Ztlumit veškerá upozornění</string>
@@ -126,6 +122,11 @@
     <string name="nc_all_ok_operation">OK, vše hotovo!</string>
     <string name="nc_announcement">Oznámení</string>
     <string name="nc_attendee_pin">Pin: %1$s</string>
+    <string name="nc_audio_player_next">Další</string>
+    <string name="nc_audio_player_play_pause">Přehrát/pozastavit</string>
+    <string name="nc_audio_player_previous">Předchozí</string>
+    <string name="nc_audio_player_queue">Seznam stop</string>
+    <string name="nc_audio_player_shuffle">Zamíchat</string>
     <string name="nc_biometric_unlock">Odemknout %1$s</string>
     <string name="nc_bluetooth_permission_hint">Pro použití bluetooth reproduktorů je třeba udělit oprávnění „Zařízení poblíž“.</string>
     <string name="nc_call_button_content_description_answer_video_call">Zvednou videohovor</string>
@@ -156,7 +157,6 @@
     <string name="nc_cancel">Storno</string>
     <string name="nc_capabilities_failed">Nepodařilo se získat schopnosti, přerušuje se</string>
     <string name="nc_caption">Titulek</string>
-    <string name="nc_certificate_dialog_text">Věříte doposud neznámému SSL certifikátu, vydaném %1$s pro %2$s, platnému od %3$s do %4$s?</string>
     <string name="nc_certificate_dialog_title">Zkontrolovat certifikát</string>
     <string name="nc_certificate_error">Vaše nastavení SSL zabránilo připojení</string>
     <string name="nc_change_cert_auth">Změnit certifikát sloužící pro ověřování se</string>
@@ -184,6 +184,7 @@
     <string name="nc_configure_cert_auth">Vyberte certifikát pro ověřování se</string>
     <string name="nc_confirm">Potvrdit</string>
     <string name="nc_connecting_call">Připojování …</string>
+    <string name="nc_contact_chat_start">Spustit</string>
     <string name="nc_contacts_done">Hotovo</string>
     <string name="nc_conversation_description">Popis konverzace</string>
     <string name="nc_conversation_menu_conversation_go_to_file">Přejít k souboru</string>
@@ -213,6 +214,7 @@
     <string name="nc_custom_color">Uživatelsky určená barva</string>
     <string name="nc_date_header_today">Dnes</string>
     <string name="nc_date_header_yesterday">Včera</string>
+    <string name="nc_deep_link_join">Připojit se</string>
     <string name="nc_delete">Smazat</string>
     <string name="nc_delete_all">Smazat vše</string>
     <string name="nc_delete_call">Smazat konverzaci</string>
@@ -312,7 +314,6 @@
     <string name="nc_lobby_start_soon">Schůzka brzy začne</string>
     <string name="nc_lobby_waiting">V tuto chvíli se nacházíte v čekárně.</string>
     <string name="nc_location_current_position_description">Vaše stávající umístění</string>
-    <string name="nc_location_permission_required">vyžadováno oprávnění pro přístup k údaji o poloze</string>
     <string name="nc_location_unknown">Pozice neznámá</string>
     <string name="nc_locked">Uzamčeno</string>
     <string name="nc_locked_tap_to_unlock">Odemkněte klepnutím</string>
@@ -325,7 +326,6 @@
     <string name="nc_logs_logging_enabled">Zaznamenávání zapnuto</string>
     <string name="nc_logs_share_diagnosis">Diagnostické hlášení</string>
     <string name="nc_logs_share_latest_crash">Nejnovější pád</string>
-    <string name="nc_logs_share_subject">%1$s záznamů událostí</string>
     <string name="nc_logs_title">Záznamy událostí</string>
     <string name="nc_manual">Nenastaveno</string>
     <string name="nc_mark_as_read">Označit jako přečtené</string>
@@ -398,6 +398,7 @@
     <string name="nc_presentation">Prezentace</string>
     <string name="nc_profile_personal_info_title">Osobní údaje</string>
     <string name="nc_promote">Povýšit na moderátora</string>
+    <string name="nc_promote_to_owner">Povýšit na vlastníka</string>
     <string name="nc_public_call_status">Veřejná konverzace</string>
     <string name="nc_push_disabled">Push upozorňování vypnutá</string>
     <string name="nc_push_notification_fetch_error">Omlouváme se, něco se pokazilo – nebylo možné stáhnout si testovací push zprávu</string>
@@ -551,6 +552,7 @@
     <string name="nc_show_notification_warning_title">Zobrazovat pravidelné varování ohledně notifikací</string>
     <string name="nc_sort_by">Řadit podle</string>
     <string name="nc_start_group_chat">Zahájit skupinový chat</string>
+    <string name="nc_start_screen_sharing">Sdílet obrazovku</string>
     <string name="nc_start_time">Čas zahájení</string>
     <string name="nc_switch_account">Přepnout účet</string>
     <string name="nc_team">Tým</string>
@@ -828,7 +830,6 @@
     
     <string name="nc_password_secure">Heslo je bezpečné</string>
     
-    <string name="nc_promote_to_owner">POvýšit na vlastníka</string>
     
     <string name="nc_reply_to_thread">Odpovědět na vlákno: %1$s</string>
     

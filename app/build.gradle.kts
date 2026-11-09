@@ -92,8 +92,8 @@ android {
         create("qa") {
             applicationId = "ru.zezh.ralk.qa"
             dimension = "default"
-            versionCode = 1
-            versionName = "1"
+            versionCode = 250010052
+            versionName = "25.1.0 RC2"
         }
     }
 
@@ -253,7 +253,7 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:$okhttpVersion")
 
     implementation("com.bluelinelabs:logansquare:1.3.7")
-    implementation("com.fasterxml.jackson.core:jackson-core:2.20.1")
+    implementation("com.fasterxml.jackson.core:jackson-core:2.22.4")
     kapt("com.bluelinelabs:logansquare-compiler:1.3.7")
 
     implementation("com.squareup.retrofit2:retrofit:$retrofit2Version")
