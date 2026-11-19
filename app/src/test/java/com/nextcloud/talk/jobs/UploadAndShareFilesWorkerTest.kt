@@ -20,6 +20,11 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import com.nextcloud.talk.data.database.dao.ChatMessagesDao
 import com.nextcloud.talk.data.database.model.SendStatus
 import com.nextcloud.talk.users.UserManager
+import com.nextcloud.talk.utils.UploadSourceGrants
+import java.net.HttpURLConnection.HTTP_INTERNAL_ERROR
+import java.net.HttpURLConnection.HTTP_NOT_IMPLEMENTED
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import kotlinx.coroutines.runBlocking
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -32,8 +37,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import retrofit2.HttpException
 import retrofit2.Response
-import java.net.HttpURLConnection.HTTP_INTERNAL_ERROR
-import java.net.HttpURLConnection.HTTP_NOT_IMPLEMENTED
 import java.util.UUID
 
 /**
@@ -61,6 +64,17 @@ class UploadAndShareFilesWorkerTest {
         assertEquals(WorkInfo.State.SUCCEEDED, workManager.getWorkInfoById(second).get()!!.state)
         verify(chatDao).updateTempMessageSendStatus(CONVERSATION_ID, "ref-a", SendStatus.FAILED)
         verify(chatDao).updateTempMessageSendStatus(CONVERSATION_ID, "ref-b", SendStatus.FAILED)
+    }
+
+    @Test
+    fun `an upload that ended releases the read access to its file`() {
+        // on a thread of its own, as in the app: the worker asks WorkManager for the other uploads of its file
+        val workManager = initWorkManager(Executors.newSingleThreadExecutor())
+        UploadSourceGrants.keep(context(), "content://media/ref-a")
+
+        awaitFinished(workManager, upload("ref-a"))
+
+        assertEquals(emptyList<Any>(), context().contentResolver.persistedUriPermissions)
     }
 
     @Test
@@ -103,7 +117,7 @@ class UploadAndShareFilesWorkerTest {
             internalConversationId = CONVERSATION_ID
         )
 
-    private fun initWorkManager(): WorkManager {
+    private fun initWorkManager(executor: Executor = SynchronousExecutor()): WorkManager {
         val factory = object : WorkerFactory() {
             override fun createWorker(
                 appContext: Context,
@@ -116,7 +130,7 @@ class UploadAndShareFilesWorkerTest {
                 }
         }
         val configuration = Configuration.Builder()
-            .setExecutor(SynchronousExecutor())
+            .setExecutor(executor)
             .setWorkerFactory(factory)
             .build()
         WorkManagerTestInitHelper.initializeTestWorkManager(context(), configuration)

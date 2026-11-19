@@ -68,11 +68,9 @@ import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil
 import com.nextcloud.talk.utils.DisplayUtils
 import com.nextcloud.talk.utils.SpreedFeatures
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-private const val SEARCH_DEBOUNCE_MS = 300
 private const val SEARCH_MIN_CHARS = 1
 private const val OVERLAY_MARGIN = 16
 
@@ -131,7 +129,8 @@ fun ConversationsListScreen(
     viewModel: ConversationsListViewModel,
     tagsViewModel: ConversationTagsViewModel,
     state: ConversationsListScreenState,
-    callbacks: ConversationsListScreenCallbacks
+    callbacks: ConversationsListScreenCallbacks,
+    audioPlayer: @Composable () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as Activity
@@ -233,11 +232,8 @@ fun ConversationsListScreen(
     }
 
     LaunchedEffect(searchQuery) {
-        if (searchQuery.isNotEmpty()) {
-            delay(SEARCH_DEBOUNCE_MS.toLong())
-            if (searchQuery.length >= SEARCH_MIN_CHARS) {
-                viewModel.getSearchQuery(context, searchQuery)
-            }
+        if (searchQuery.length >= SEARCH_MIN_CHARS) {
+            viewModel.getSearchQuery(context, searchQuery)
         }
     }
 
@@ -273,6 +269,7 @@ fun ConversationsListScreen(
                             onAccountChooserClick = callbacks.onAccountChooserClick
                         )
                     )
+                    audioPlayer()
                 }
             }
         ) { paddingValues ->

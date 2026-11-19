@@ -321,6 +321,18 @@ class AppPreferencesImpl(val context: Context) : AppPreferences {
             }
         }
 
+    override fun getCallViewMode(): String =
+        runBlocking {
+            async { readString(CALL_VIEW_MODE).first() }
+        }.getCompleted()
+
+    override fun setCallViewMode(value: String) =
+        runBlocking<Unit> {
+            async {
+                writeString(CALL_VIEW_MODE, value)
+            }
+        }
+
     override fun getIsKeyboardIncognito(): Boolean {
         val read = runBlocking { async { readBoolean(INCOGNITO_KEYBOARD).first() } }.getCompleted()
         return read
@@ -565,18 +577,6 @@ class AppPreferencesImpl(val context: Context) : AppPreferences {
         return read.ifEmpty { default }
     }
 
-    override fun saveWaveFormForFile(filename: String, array: Array<Float>) =
-        runBlocking<Unit> {
-            async {
-                writeString(filename, array.contentToString())
-            }
-        }
-
-    override fun getWaveFormFromFile(filename: String): Array<Float> {
-        val string = runBlocking { async { readString(filename).first() } }.getCompleted()
-        return if (string.isNotEmpty()) string.convertStringToArray() else floatArrayOf().toTypedArray()
-    }
-
     override fun saveLastKnownId(internalConversationId: String, lastReadId: Int) {
         runBlocking<Unit> {
             async {
@@ -625,6 +625,46 @@ class AppPreferencesImpl(val context: Context) : AppPreferences {
                 return@async if (name == "") PlaybackSpeed.NORMAL else PlaybackSpeed.byName(name)
             }
         }.getCompleted()
+
+    override fun saveAudioFilePlaybackSpeed(userId: String, speed: PlaybackSpeed) {
+        runBlocking<Unit> {
+            async {
+                writeString(userId + AUDIO_FILE_PLAY_BACK, speed.name)
+            }
+        }
+    }
+
+    override fun getAudioFilePlaybackSpeed(userId: String): PlaybackSpeed =
+        runBlocking {
+            async {
+                val name = readString(userId + AUDIO_FILE_PLAY_BACK).first()
+                return@async if (name == "") PlaybackSpeed.NORMAL else PlaybackSpeed.byName(name)
+            }
+        }.getCompleted()
+
+    override fun getChatAudioShuffle(): Boolean =
+        runBlocking {
+            async { readBoolean(CHAT_AUDIO_SHUFFLE).first() }
+        }.getCompleted()
+
+    override fun setChatAudioShuffle(value: Boolean) =
+        runBlocking<Unit> {
+            async {
+                writeBoolean(CHAT_AUDIO_SHUFFLE, value)
+            }
+        }
+
+    override fun getChatAudioRepeatMode(): String =
+        runBlocking {
+            async { readString(CHAT_AUDIO_REPEAT_MODE).first() }
+        }.getCompleted()
+
+    override fun setChatAudioRepeatMode(value: String) =
+        runBlocking<Unit> {
+            async {
+                writeString(CHAT_AUDIO_REPEAT_MODE, value)
+            }
+        }
 
     override fun getNotificationWarningLastPostponedDate(): Long =
         runBlocking {
@@ -709,6 +749,7 @@ class AppPreferencesImpl(val context: Context) : AppPreferences {
         const val SCREEN_SECURITY = "screen_security"
         const val SCREEN_LOCK = "screen_lock"
         const val CALL_MICROPHONE_MUTED = "call_microphone_muted"
+        const val CALL_VIEW_MODE = "call_view_mode"
         const val INCOGNITO_KEYBOARD = "incognito_keyboard"
         const val MESSAGE_INPUT_RECTANGULAR = "message_input_rectangular"
         const val SHOW_ECOSYSTEM = "SHOW_ECOSYSTEM"
@@ -723,18 +764,13 @@ class AppPreferencesImpl(val context: Context) : AppPreferences {
         const val TYPING_STATUS = "typing_status"
         const val MESSAGE_QUEUE = "@message_queue"
         const val PLAY_BACK = "_playback"
+        const val AUDIO_FILE_PLAY_BACK = "_audio_file_playback"
+        const val CHAT_AUDIO_SHUFFLE = "chat_audio_shuffle"
+        const val CHAT_AUDIO_REPEAT_MODE = "chat_audio_repeat_mode"
         const val VOICE_MESSAGE_PLAYBACK_SPEEDS = "voice_message_playback_speeds"
         const val SHOW_REGULAR_NOTIFICATION_WARNING = "show_regular_notification_warning"
         const val LAST_NOTIFICATION_WARNING = "last_notification_warning"
         const val CONVERSATION_LIST_POSITION_OFFSET = "CONVERSATION_LIST_POSITION_OFFSET"
         const val CONVERSATION_LIST_LAST_USER_ID = "CONVERSATION_LIST_LAST_USER_ID"
-        private fun String.convertStringToArray(): Array<Float> {
-            var varString = this
-            val floatList = mutableListOf<Float>()
-            varString = varString.replace("\\[".toRegex(), "")
-            varString = varString.replace("]".toRegex(), "")
-            varString.split(",").forEach { floatList.add(it.toFloat()) }
-            return floatList.toTypedArray()
-        }
     }
 }

@@ -189,12 +189,15 @@
     <string name="nc_call_timeout">Inget svar på 45 sekunder, tryck för att försöka igen</string>
     <string name="nc_call_unknown">%s samtal</string>
     <string name="nc_call_video">%s videosamtal</string>
+    <string name="nc_call_view_mode">Visningsläge för samtal</string>
+    <string name="nc_call_view_mode_grid">Rutnätsvy</string>
+    <string name="nc_call_view_mode_speaker">Talarvy</string>
+    <string name="nc_call_view_mode_speaker_with_participant_bar">Talarvy med deltagarfält</string>
     <string name="nc_call_voice">%s röstsamtal</string>
     <string name="nc_camera_permission_hint">För att aktivera videokommunikation måste du bevilja \"Kamera\"-tillstånd.</string>
     <string name="nc_cancel">Avbryt</string>
     <string name="nc_capabilities_failed">Misslyckades att hämta funktioner, avbryter</string>
     <string name="nc_caption">Rubrik</string>
-    <string name="nc_certificate_dialog_text">Litar du på det tills nu okända SSL-certifikatet, skapad av  %1$s för %2$s, giltig från%3$s till %4$s?</string>
     <string name="nc_certificate_dialog_text_for_host">Vill du lita på det hittills okända SSL-certifikatet för %1$s, utfärdat av %2$s för %3$s, som är giltigt från %4$s till %5$s? Det kommer endast att vara betrott för %1$s.</string>
     <string name="nc_certificate_dialog_title">Kontrollera certifikatet</string>
     <string name="nc_certificate_error">Dina SSL-inställningar förhindrade anslutning</string>
@@ -386,6 +389,9 @@
     <string name="nc_lobby_start_date">Det här mötet är planerat till %1$s</string>
     <string name="nc_lobby_start_soon">Mötet börjar snart</string>
     <string name="nc_lobby_waiting">Du väntar för närvarande i lobbyn.</string>
+    <string name="nc_local_network_permission_denied">Tillåt åtkomst till lokalt nätverk för att ansluta till den här servern.</string>
+    <string name="nc_local_network_permission_message">Den här servern finns i ditt lokala nätverk. Den kan endast nås med behörigheten ”Enheter i närheten”. Det går inte att ansluta till servern utan den.</string>
+    <string name="nc_local_network_permission_title">Tillåt åtkomst till lokalt nätverk</string>
     <string name="nc_location_current_position_description">Din nuvarande plats</string>
     <string name="nc_location_unknown">Position okänd</string>
     <string name="nc_locked">Låst</string>
@@ -408,7 +414,6 @@
     <string name="nc_logs_share">Dela loggar</string>
     <string name="nc_logs_share_diagnosis">Diagnosrapport</string>
     <string name="nc_logs_share_latest_crash">Senaste kraschrapporten</string>
-    <string name="nc_logs_share_subject">%1$s loggar</string>
     <string name="nc_logs_share_no_app_found">Ingen app hittades för att skicka rapporten.</string>
     <string name="nc_logs_title">Loggar</string>
     <string name="nc_logs_total_size">Total storlek: %d KB</string>
@@ -563,10 +568,10 @@
     <string name="nc_server_db_upgrade_needed">Vänligen uppgradera din %1$s-databas</string>
     <string name="nc_server_failed_to_import_account">Misslyckades att importera valt konto</string>
     <string name="nc_server_helper_text">Länken till din %1$s webbsida när du öppnar den i webbläsaren.</string>
-    <string name="nc_server_import_account">Importera konton från %1$s-appen</string>
     <string name="nc_server_http_fallback_confirm">Använd HTTP</string>
     <string name="nc_server_http_fallback_message">Det gick inte att ansluta till servern via HTTPS. Vill du ansluta via okrypterat HTTP i stället?</string>
     <string name="nc_server_http_fallback_title">Osäker anslutning</string>
+    <string name="nc_server_import_account">Importera konto från %1$s-appen</string>
     <string name="nc_server_import_account_plain">Importera konto</string>
     <string name="nc_server_import_accounts">Importera konton från %1$s-appen</string>
     <string name="nc_server_import_accounts_plain">Importera konton</string>
@@ -696,6 +701,7 @@
     <string name="nc_voice_message">Röstmeddelande</string>
     <string name="nc_voice_message_hold_to_record_info">Håll ned för att spela in, släpp för att skicka.</string>
     <string name="nc_voice_message_missing_audio_permission">Tillstånd för ljudinspelning krävs</string>
+    <string name="nc_voice_message_recording_interrupted">Inspelningen stoppades</string>
     <string name="nc_voice_message_slide_to_cancel">« Dra för att avbryta</string>
     <string name="nc_webinar">Webbinarium</string>
     <string name="nc_webinar_description">Begränsad konversation med lobby aktiverad, idealisk för offentliga webbseminarier</string>

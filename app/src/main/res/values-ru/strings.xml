@@ -188,6 +188,10 @@
     <string name="nc_call_timeout">Нет ответа в течение 45 секунд, нажмите, чтобы повторить попытку</string>
     <string name="nc_call_unknown">%s звонок</string>
     <string name="nc_call_video">%s видеозвонок</string>
+    <string name="nc_call_view_mode">Вид экрана вызова</string>
+    <string name="nc_call_view_mode_grid">Вид сеткой</string>
+    <string name="nc_call_view_mode_speaker">Вид выступающего</string>
+    <string name="nc_call_view_mode_speaker_with_participant_bar">Вид выступающего с панелью участников</string>
     <string name="nc_call_voice">%s голосовой вызов</string>
     <string name="nc_camera_permission_hint">Для включения видеосвязи предоставьте разрешение «Камера».</string>
     <string name="nc_cancel">Отмена</string>
@@ -361,6 +365,9 @@
     <string name="nc_location_current_position_description">Ваше текущее местоположение</string>
     <string name="nc_location_permission_required">требуется разрешение на размещение</string>
     <string name="nc_location_unknown">Положение неизвестно</string>
+    <string name="nc_local_network_permission_denied">Разрешите доступ к локальной сети, чтобы подключиться к этому серверу.</string>
+    <string name="nc_local_network_permission_message">Этот сервер находится в вашей локальной сети. Подключиться к нему можно только с разрешением «Устройства поблизости», без него подключение не удастся.</string>
+    <string name="nc_local_network_permission_title">Разрешить доступ к локальной сети</string>
     <string name="nc_locked">Заблокировано</string>
     <string name="nc_locked_tap_to_unlock">Коснитесь для разблокирования</string>
     <string name="nc_logs_disable_delete">Удалить журнал</string>
@@ -671,6 +678,7 @@
     <string name="nc_voice_message_hold_to_record_info">Удерживайте для записи, отпустите для отправки.</string>
     <string name="nc_voice_message_missing_audio_permission">Требуется разрешение на аудиозапись</string>
     <string name="nc_voice_message_slide_to_cancel">« Сдвинуть для отмены</string>
+    <string name="nc_voice_message_recording_interrupted">Запись остановлена</string>
     <string name="nc_webinar">Вебинар</string>
     <string name="nc_yes">Да</string>
     <string name="nc_zoom_in">Приблизить</string>

@@ -17,14 +17,17 @@ buildscript {
     repositories {
         google()
         gradlePluginPortal()
+        // Google's mirror of Maven Central, first: Maven Central rate-limits the CI runners (HTTP 429). The dependency
+        // verification in gradle/verification-metadata.xml checks each artifact, whichever repository serves it.
+        maven { url = 'https://maven-central.storage-download.googleapis.com/maven2/' }
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:9.4.1'
+        classpath 'com.android.tools.build:gradle:9.5.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}"
         classpath "org.jetbrains.kotlin:kotlin-serialization:${kotlinVersion}"
-        classpath "com.android.legacy-kapt:com.android.legacy-kapt.gradle.plugin:9.4.1"
+        classpath "com.android.legacy-kapt:com.android.legacy-kapt.gradle.plugin:9.5.1"
         classpath 'com.github.spotbugs.snom:spotbugs-gradle-plugin:6.5.13'
         classpath "io.gitlab.arturbosch.detekt:detekt-gradle-plugin:1.23.8"
         classpath "org.jlleitschuh.gradle:ktlint-gradle:14.2.0"
@@ -42,6 +45,9 @@ configurations.configureEach {
 allprojects {
     repositories {
         google()
+        // Google's mirror of Maven Central, first: Maven Central rate-limits the CI runners (HTTP 429). The dependency
+        // verification in gradle/verification-metadata.xml checks each artifact, whichever repository serves it.
+        maven { url = 'https://maven-central.storage-download.googleapis.com/maven2/' }
         mavenCentral()
         maven {
             url = 'https://jitpack.io'

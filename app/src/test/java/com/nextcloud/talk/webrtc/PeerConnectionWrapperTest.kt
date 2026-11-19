@@ -112,7 +112,10 @@ class PeerConnectionWrapperTest {
             true,
             "video",
             mockedSignalingMessageReceiver,
-            mockedSignalingMessageSender
+            mockedSignalingMessageSender,
+            false,
+            null,
+            null
         )
 
         peerConnectionWrapper!!.send(DataChannelMessageDto("the-message-type"))
@@ -151,7 +154,10 @@ class PeerConnectionWrapperTest {
             true,
             "video",
             mockedSignalingMessageReceiver,
-            mockedSignalingMessageSender
+            mockedSignalingMessageSender,
+            false,
+            null,
+            null
         )
 
         val mockedRandomIdDataChannel = Mockito.mock(DataChannel::class.java)
@@ -198,7 +204,10 @@ class PeerConnectionWrapperTest {
             true,
             "video",
             mockedSignalingMessageReceiver,
-            mockedSignalingMessageSender
+            mockedSignalingMessageSender,
+            false,
+            null,
+            null
         )
 
         peerConnectionWrapper!!.send(DataChannelMessageDto("the-message-type"))
@@ -254,7 +263,10 @@ class PeerConnectionWrapperTest {
                 true,
                 "video",
                 mockedSignalingMessageReceiver,
-                mockedSignalingMessageSender
+                mockedSignalingMessageSender,
+                false,
+                null,
+                null
             )
 
             val dataChannelMessageCount = 5
@@ -327,7 +339,10 @@ class PeerConnectionWrapperTest {
             true,
             "video",
             mockedSignalingMessageReceiver,
-            mockedSignalingMessageSender
+            mockedSignalingMessageSender,
+            false,
+            null,
+            null
         )
 
         val mockedDataChannelMessageListener = Mockito.mock(DataChannelMessageListener::class.java)
@@ -372,6 +387,20 @@ class PeerConnectionWrapperTest {
 
         Mockito.verify(mockedDataChannelMessageListener).onVideoOff()
         Mockito.verifyNoMoreInteractions(mockedDataChannelMessageListener)
+
+        statusDataChannelObserverArgumentCaptor.value.onMessage(
+            dataChannelMessageToBuffer(DataChannelMessageDto("speaking"))
+        )
+
+        Mockito.verify(mockedDataChannelMessageListener).onSpeaking()
+        Mockito.verifyNoMoreInteractions(mockedDataChannelMessageListener)
+
+        statusDataChannelObserverArgumentCaptor.value.onMessage(
+            dataChannelMessageToBuffer(DataChannelMessageDto("stoppedSpeaking"))
+        )
+
+        Mockito.verify(mockedDataChannelMessageListener).onStoppedSpeaking()
+        Mockito.verifyNoMoreInteractions(mockedDataChannelMessageListener)
     }
 
     @Test
@@ -408,7 +437,10 @@ class PeerConnectionWrapperTest {
             true,
             "video",
             mockedSignalingMessageReceiver,
-            mockedSignalingMessageSender
+            mockedSignalingMessageSender,
+            false,
+            null,
+            null
         )
 
         val randomIdDataChannelObserverArgumentCaptor: ArgumentCaptor<DataChannel.Observer> =
@@ -469,7 +501,10 @@ class PeerConnectionWrapperTest {
             true,
             "video",
             mockedSignalingMessageReceiver,
-            mockedSignalingMessageSender
+            mockedSignalingMessageSender,
+            false,
+            null,
+            null
         )
 
         val mockedRandomIdDataChannel = Mockito.mock(DataChannel::class.java)
@@ -519,7 +554,10 @@ class PeerConnectionWrapperTest {
                 true,
                 "video",
                 mockedSignalingMessageReceiver,
-                mockedSignalingMessageSender
+                mockedSignalingMessageSender,
+                false,
+                null,
+                null
             )
 
             val dataChannelCount = 5
@@ -629,7 +667,10 @@ class PeerConnectionWrapperTest {
                 true,
                 "video",
                 mockedSignalingMessageReceiver,
-                mockedSignalingMessageSender
+                mockedSignalingMessageSender,
+                false,
+                null,
+                null
             )
 
             val dataChannelMessageCount = 5
@@ -711,7 +752,10 @@ class PeerConnectionWrapperTest {
                 true,
                 "video",
                 mockedSignalingMessageReceiver,
-                mockedSignalingMessageSender
+                mockedSignalingMessageSender,
+                false,
+                null,
+                null
             )
 
             val mockedDataChannelMessageListener = Mockito.mock(DataChannelMessageListener::class.java)

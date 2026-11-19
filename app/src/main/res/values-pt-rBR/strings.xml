@@ -190,6 +190,10 @@
     <string name="nc_call_timeout">45 segundos sem resposta, toque para retentar</string>
     <string name="nc_call_unknown">%s chamada</string>
     <string name="nc_call_video">%s chamada de vídeo</string>
+    <string name="nc_call_view_mode">Modo de visualização de chamadas</string>
+    <string name="nc_call_view_mode_grid">Visualização em grade</string>
+    <string name="nc_call_view_mode_speaker">Visualização de palestrante</string>
+    <string name="nc_call_view_mode_speaker_with_participant_bar">Visualização de palestrante com barra de participantes</string>
     <string name="nc_call_voice">%s chamada de voz</string>
     <string name="nc_camera_permission_hint">Para ativar a comunicação por vídeo, por favor, conceda a permissão \"Câmera\".</string>
     <string name="nc_cancel">Cancelar</string>
@@ -386,6 +390,9 @@
     <string name="nc_lobby_start_date">Esta reunião está agendada para %1$s</string>
     <string name="nc_lobby_start_soon">A reunião vai começar em breve</string>
     <string name="nc_lobby_waiting">No momento, você está esperando na sala de espera.</string>
+    <string name="nc_local_network_permission_denied">Permita o acesso à rede local para se conectar a este servidor.</string>
+    <string name="nc_local_network_permission_message">Este servidor está na sua rede local. Só é possível acessá-lo com a permissão “Dispositivos próximos”. Sem ela, a conexão com o servidor falha.</string>
+    <string name="nc_local_network_permission_title">Permitir acesso à rede local</string>
     <string name="nc_location_current_position_description">Sua localização atual</string>
     <string name="nc_location_unknown">Posição desconhecida</string>
     <string name="nc_locked">Trancado</string>
@@ -701,6 +708,7 @@
     <string name="nc_voice_message">Mensagem de voz</string>
     <string name="nc_voice_message_hold_to_record_info">Segure para gravar, solte para enviar.</string>
     <string name="nc_voice_message_missing_audio_permission">A permissão para gravação de áudio é necessária</string>
+    <string name="nc_voice_message_recording_interrupted">A gravação foi interrompida</string>
     <string name="nc_voice_message_slide_to_cancel">« Deslize para cancelar</string>
     <string name="nc_webinar">Webinário</string>
     <string name="nc_webinar_description">Conversa restrita com a sala de espera ativada, ideal para webinários públicos</string>

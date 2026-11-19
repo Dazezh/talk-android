@@ -536,13 +536,14 @@ fun RoomCreationOptions(conversationCreationViewModel: ConversationCreationViewM
     }
 
     if (isGuestsAllowed && isPasswordSet) {
+        val appName = stringResource(R.string.nc_app_product_name)
         ConversationOption(
             icon = R.drawable.ic_content_copy,
             text = R.string.nc_copy_password,
             onClick = {
                 copyPasswordToClipboard(
                     context = context,
-                    label = context.resources.getString(R.string.nc_app_product_name),
+                    label = appName,
                     password = conversationCreationViewModel.password.value
                 )
             }
@@ -773,6 +774,7 @@ fun CreateConversation(conversationCreationViewModel: ConversationCreationViewMo
     val isCreatingRoom by conversationCreationViewModel.isCreatingRoom.collectAsState()
     val creationState by conversationCreationViewModel.creationState.collectAsState()
     val password by conversationCreationViewModel.password.collectAsState()
+    val roomName by conversationCreationViewModel.roomName.collectAsState()
     var createdPublicConversation by rememberSaveable { mutableStateOf<String?>(null) }
     var createdWithPassword by rememberSaveable { mutableStateOf(false) }
     val isPasswordMissing = conversationCreationViewModel.isPasswordEnforced &&
@@ -810,6 +812,7 @@ fun CreateConversation(conversationCreationViewModel: ConversationCreationViewMo
     ) {
         Button(
             enabled = !isCreatingRoom &&
+                roomName.isNotBlank() &&
                 !conversationCreationViewModel.isLoadingPresets &&
                 !isPasswordMissing,
             onClick = {

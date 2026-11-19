@@ -21,6 +21,12 @@
       "allowedVersions": "!/^5[.]23[.]0$/"
     },
     {
+      // LiteRT 2.x depends on Play Asset Delivery (com.google.android.play:ai-delivery),
+      // which F-Droid's scanner flags as non-free
+      "matchPackageNames": ["com.google.ai.edge.litert:**"],
+      "allowedVersions": "<2"
+    },
+    {
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions"
     },

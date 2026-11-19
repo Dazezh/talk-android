@@ -6,7 +6,7 @@ SPDX-PackageSupplier = "Nextcloud Android team <android@nextcloud.com>"
 SPDX-PackageDownloadLocation = "https://github.com/nextcloud/talk-android"
 
 [[annotations]]
-path = ["app/src/main/res/values-**/strings.xml", "**/.gitignore", ".idea/**", "app/src/test/resources/robolectric.properties", "app/src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker", "app/src/test/resources/**.json", "fastlane/metadata/**", "app/schemas/com.nextcloud.talk.data.source.local.TalkDatabase/**.json", "app/src/generic/fastlane/metadata/android/**/full_description.txt"]
+path = ["app/src/main/res/values-**/strings.xml", "**/.gitignore", ".idea/**", "app/src/test/resources/robolectric.properties", "app/src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker", "app/src/test/resources/**.json", "src/generic/fastlane/metadata/**", "app/schemas/com.nextcloud.talk.data.source.local.TalkDatabase/**.json"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2017-2024 Nextcloud GmbH and Nextcloud contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
@@ -28,12 +28,6 @@ path = ["app/src/main/res/raw/librem_by_feandesign_call.ogg", "app/src/main/res/
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Feandesign"
 SPDX-License-Identifier = "CC0-1.0"
-
-[[annotations]]
-path = "app/src/main/res/raw/next_voice_message_doodle.ogg"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2024 Paciosoft"
-SPDX-License-Identifier = "CC-BY-4.0"
 
 [[annotations]]
 path = "app/src/main/assets/selfie_segmenter.tflite"

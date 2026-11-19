@@ -7,7 +7,6 @@
  */
 package com.nextcloud.talk.chat.viewmodels
 
-import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
@@ -15,23 +14,29 @@ import android.provider.OpenableColumns
 import android.util.Log
 import androidx.annotation.StringRes
 import androidx.annotation.VisibleForTesting
+import androidx.core.net.toUri
+import androidx.core.content.FileProvider
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.asFlow
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.google.gson.Gson
+import com.nextcloud.talk.BuildConfig
 import com.nextcloud.talk.R
 import com.nextcloud.talk.application.NextcloudTalkApplication
 import com.nextcloud.talk.arbitrarystorage.ArbitraryStorageManager
 import com.nextcloud.talk.chat.data.ChatMessageRepository
 import com.nextcloud.talk.chat.data.io.AudioFocusRequestManager
-import com.nextcloud.talk.chat.data.io.MediaPlayerManager
 import com.nextcloud.talk.chat.data.io.MediaRecorderManager
 import com.nextcloud.talk.chat.data.model.ChatMessage
 import com.nextcloud.talk.chat.data.model.FileParameters
 import com.nextcloud.talk.chat.data.network.ChatNetworkDataSource
+import com.nextcloud.talk.chat.runProviderCall
 import com.nextcloud.talk.chat.ui.model.ChatMessageUi
 import com.nextcloud.talk.chat.ui.model.MessageStatusIcon
 import com.nextcloud.talk.chat.ui.model.MessageTypeContent
@@ -44,13 +49,11 @@ import com.nextcloud.talk.conversationlist.viewmodels.ConversationsListViewModel
 import com.nextcloud.talk.dagger.modules.ApplicationScope
 import com.nextcloud.talk.data.database.mappers.toDomainModel
 import com.nextcloud.talk.data.database.model.ChatMessageEntity
+import com.nextcloud.talk.data.database.model.SendStatus
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.jobs.ReadMarkerSyncWorker
 import com.nextcloud.talk.jobs.SendMessageWorker
 import com.nextcloud.talk.jobs.ShareOperationWorker
-import androidx.lifecycle.asFlow
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import com.nextcloud.talk.jobs.UploadAndShareFilesWorker
 import com.nextcloud.talk.logger.Logger
 import com.nextcloud.talk.mediaviewer.model.MediaViewerGroup
@@ -72,23 +75,24 @@ import com.nextcloud.talk.models.json.userAbsence.UserAbsenceDataDto
 import com.nextcloud.talk.repositories.reactions.ReactionsRepository
 import com.nextcloud.talk.repositories.unifiedsearch.UnifiedSearchRepository
 import com.nextcloud.talk.threadsoverview.data.ThreadsRepository
-import com.nextcloud.talk.ui.PlaybackSpeed
 import com.nextcloud.talk.users.UserManager
 import com.nextcloud.talk.utils.ApiUtils
 import com.nextcloud.talk.utils.CapabilitiesUtil.hasSpreedFeatureCapability
 import com.nextcloud.talk.utils.CharacterAvatarUtils
+import com.nextcloud.talk.utils.ContactUtils
 import com.nextcloud.talk.utils.ConversationUtils
 import com.nextcloud.talk.utils.Mimetype
 import com.nextcloud.talk.utils.MimetypeUtils
 import com.nextcloud.talk.utils.ParticipantPermissions
 import com.nextcloud.talk.utils.SpreedFeatures
+import com.nextcloud.talk.utils.UploadSourceGrants
 import com.nextcloud.talk.utils.UserIdUtils
-import com.nextcloud.talk.utils.throttleLatest
 import com.nextcloud.talk.utils.bundle.BundleKeys
 import com.nextcloud.talk.utils.isTransientFailure
 import com.nextcloud.talk.utils.message.SendMessageUtils
 import com.nextcloud.talk.utils.message.groupHashOf
 import com.nextcloud.talk.utils.preferences.AppPreferences
+import com.nextcloud.talk.utils.throttleLatest
 import com.nextcloud.talk.webrtc.WebSocketConnectionHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -146,7 +150,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 import javax.inject.Inject
-import androidx.core.net.toUri
 
 private const val FILE_PLACEHOLDER_MESSAGE = "{file}"
 private const val VCARD_MIMETYPE = "text/vcard"
@@ -362,6 +365,12 @@ class ChatViewModel @AssistedInject constructor(
 
     private var localLastReadMessage: Int = 0
 
+    // Newest message list from the database, updated before the throttled rebuild of the UI items. It is the
+    // source of truth for the user's own sends (temporary copy with its send status, then the accepted
+    // message) when the read marker is decided, see updateRemoteLastReadMessageIfNeeded.
+    @Volatile
+    private var latestMessages: List<ChatMessage> = emptyList()
+
     /**
      * Set once the user marked a message as unread, so the automatic read marker handling keeps its
      * hands off the conversation for the rest of this visit.
@@ -371,7 +380,6 @@ class ChatViewModel @AssistedInject constructor(
     private var showUnreadMessagesMarker: Boolean = true
     private var isLoadMoreInProgress = false
 
-    private val mediaPlayerManager: MediaPlayerManager = MediaPlayerManager.sharedInstance(appPreferences)
     lateinit var currentLifeCycleFlag: LifeCycleFlag
     val disposableSet = mutableSetOf<Disposable>()
 
@@ -382,6 +390,10 @@ class ChatViewModel @AssistedInject constructor(
     val spreedCapabilities: StateFlow<SpreedCapabilityDto?> = _spreedCapabilities
 
     private var lobbyPollingJob: Job? = null
+
+    // The message polling lives as long as this view model. A new screen after a configuration change calls
+    // initData() again, which must not start a second polling loop next to the running one.
+    private var messagePollingJob: Job? = null
 
     private val _uploadProgressMap = MutableStateFlow<Map<String, Int>>(emptyMap())
     val uploadProgressMap: StateFlow<Map<String, Int>> = _uploadProgressMap
@@ -440,7 +452,7 @@ class ChatViewModel @AssistedInject constructor(
         // also cancel. Without this, cancel silently did nothing for any such placeholder, leaving
         // the user with no way to clear a permanently stuck upload.
         uploadReferenceToWorkId.remove(referenceId)?.let { workId ->
-            UploadAndShareFilesWorker.cancelUpload(referenceId, workId)
+            UploadAndShareFilesWorker.cancelUpload(referenceId, workId, _uploadedLocalPreviewMap.value[referenceId])
         }
         viewModelScope.launch {
             chatRepository.deleteTempMessageByReferenceId(referenceId)
@@ -476,7 +488,6 @@ class ChatViewModel @AssistedInject constructor(
         currentLifeCycleFlag = LifeCycleFlag.RESUMED
         mediaRecorderManager.handleOnResume()
         chatRepository.handleOnResume()
-        mediaPlayerManager.handleOnResume()
         if (isReturningFromBackground) {
             viewModelScope.launch {
                 chatRepository.fetchNewMessages()
@@ -495,7 +506,6 @@ class ChatViewModel @AssistedInject constructor(
         messageSearchHelper?.cancelSearch()
         mediaRecorderManager.handleOnPause()
         chatRepository.handleOnPause()
-        mediaPlayerManager.handleOnPause()
 
         saveMessageDraft()
     }
@@ -503,12 +513,37 @@ class ChatViewModel @AssistedInject constructor(
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
         currentLifeCycleFlag = LifeCycleFlag.STOPPED
-        // a rotation stops the activity but not the recording: the new activity goes on with it
-        if ((owner as? Activity)?.isChangingConfigurations != true) {
-            mediaRecorderManager.handleOnStop()
-        }
+        // A stopped chat keeps a voice recording running: it ends when the chat is left (onCleared) or by
+        // interruptAudioRecording, not when a rotation or another Talk screen like the media viewer covers the chat.
         chatRepository.handleOnStop()
-        mediaPlayerManager.handleOnStop()
+    }
+
+    override fun onCleared() {
+        // the recording can not be shown again once the chat is gone
+        if (mediaRecorderManager.mediaRecorderState == MediaRecorderManager.MediaRecorderState.RECORDING) {
+            stopAndDiscardAudioRecording()
+        }
+    }
+
+    /**
+     * Ends a running recording although the chat was not left, e.g. because the app went to the background: a locked
+     * recording keeps what was captured so far and is shown as interrupted, a recording that was still held is
+     * discarded like on a cancelled touch.
+     */
+    fun interruptAudioRecording() {
+        if (mediaRecorderManager.mediaRecorderState != MediaRecorderManager.MediaRecorderState.RECORDING) {
+            return
+        }
+        if (_getVoiceRecordingLocked.value == true) {
+            stopAudioRecording()
+            _voiceRecordingInterrupted.value = true
+        } else {
+            stopAndDiscardAudioRecording()
+        }
+    }
+
+    fun onVoiceRecordingInterruptionShown() {
+        _voiceRecordingInterrupted.value = false
     }
 
     fun onSignalingChatMessageReceived(chatMessages: List<ChatMessageDto>) {
@@ -521,15 +556,6 @@ class ChatViewModel @AssistedInject constructor(
         showUnreadMessagesMarker = shouldShow
     }
 
-    val mediaPlayerSeekbarObserver: Flow<ChatMessage>
-        get() = mediaPlayerManager.mediaPlayerSeekBarPositionMsg
-
-    val currentlyPlayedMessageId: Flow<Int?> = mediaPlayerManager.currentCycledMessage.map { it?.jsonMessageId }
-
-    fun setPlayBack(speed: PlaybackSpeed) {
-        mediaPlayerManager.setPlayBackSpeed(speed)
-    }
-
     private val _recordTouchObserver: MutableLiveData<Float> = MutableLiveData()
     val recordTouchObserver: LiveData<Float>
         get() = _recordTouchObserver
@@ -537,6 +563,12 @@ class ChatViewModel @AssistedInject constructor(
     private val _getVoiceRecordingInProgress: MutableLiveData<Boolean> = MutableLiveData()
     val getVoiceRecordingInProgress: LiveData<Boolean>
         get() = _getVoiceRecordingInProgress
+
+    private val _voiceRecordingInterrupted: MutableLiveData<Boolean> = MutableLiveData(false)
+
+    /** True while the stop of a locked recording by leaving the app was not shown to the user yet. */
+    val voiceRecordingInterrupted: LiveData<Boolean>
+        get() = _voiceRecordingInterrupted
 
     private val _getVoiceRecordingLocked: MutableLiveData<Boolean> = MutableLiveData()
     val getVoiceRecordingLocked: LiveData<Boolean>
@@ -553,10 +585,6 @@ class ChatViewModel @AssistedInject constructor(
     private val _unbindRoomResult = MutableLiveData<UnbindRoomUiState>(UnbindRoomUiState.None)
     val unbindRoomResult: LiveData<UnbindRoomUiState>
         get() = _unbindRoomResult
-
-    private val _voiceMessagePlaybackSpeedPreferences: MutableLiveData<Map<String, PlaybackSpeed>> = MutableLiveData()
-    val voiceMessagePlaybackSpeedPreferences: LiveData<Map<String, PlaybackSpeed>>
-        get() = _voiceMessagePlaybackSpeedPreferences
 
     private val _threadRetrieveState = MutableStateFlow<ThreadRetrieveUiState>(ThreadRetrieveUiState.None)
     val threadRetrieveState: StateFlow<ThreadRetrieveUiState> = _threadRetrieveState
@@ -830,7 +858,6 @@ class ChatViewModel @AssistedInject constructor(
         observeLobbyState()
         observeLobbyPolling()
         observeMessages()
-        observeMediaPlayerProgressForCompose()
         observePinnedMessage()
         observeRoomRefresh()
         observeIncomingMessages()
@@ -1080,95 +1107,6 @@ class ChatViewModel @AssistedInject constructor(
         firstUnreadMessageId = null
     }
 
-    private fun observeMediaPlayerProgressForCompose() {
-        mediaPlayerSeekbarObserver
-            .onEach { message ->
-                syncVoiceMessageUiState(message)
-            }
-            .launchIn(viewModelScope)
-    }
-
-    fun pauseVoiceMessageUiState(messageId: Int) {
-        _uiState.update { current ->
-            val updatedItems = current.items.map { item ->
-                if (item is ChatItem.MessageItem && item.uiMessage.id == messageId) {
-                    val voiceContent = item.uiMessage.content as? MessageTypeContent.Voice
-                    if (voiceContent != null) {
-                        item.copy(uiMessage = item.uiMessage.copy(content = voiceContent.copy(isPlaying = false)))
-                    } else {
-                        item
-                    }
-                } else {
-                    item
-                }
-            }
-            current.copy(items = updatedItems)
-        }
-    }
-
-    fun setVoiceMessageSpeed(messageId: Int, speed: PlaybackSpeed) {
-        _uiState.update { current ->
-            val updatedItems = current.items.map { item ->
-                if (item is ChatItem.MessageItem && item.uiMessage.id == messageId) {
-                    val voiceContent = item.uiMessage.content as? MessageTypeContent.Voice
-                    if (voiceContent != null) {
-                        item.copy(uiMessage = item.uiMessage.copy(content = voiceContent.copy(playbackSpeed = speed)))
-                    } else {
-                        item
-                    }
-                } else {
-                    item
-                }
-            }
-            current.copy(items = updatedItems)
-        }
-    }
-
-    var currentVoiceMessage: ChatMessage? = null
-
-    fun syncVoiceMessageUiState(message: ChatMessage) {
-        currentVoiceMessage = message
-        _uiState.update { current ->
-            val updatedItems = current.items.map { item ->
-                if (item is ChatItem.MessageItem && item.uiMessage.id == message.jsonMessageId) {
-                    when (val content = item.uiMessage.content) {
-                        is MessageTypeContent.Voice -> {
-                            val updatedVoiceContent = content.copy(
-                                actorId = message.actorId,
-                                isPlaying = message.isPlayingVoiceMessage,
-                                wasPlayed = message.wasPlayedVoiceMessage,
-                                isDownloading = message.isDownloadingVoiceMessage,
-                                durationSeconds = message.voiceMessageDuration,
-                                playedSeconds = message.voiceMessagePlayedSeconds,
-                                seekbarProgress = message.voiceMessageSeekbarProgress,
-                                waveform = message.voiceMessageFloatArray?.toList() ?: content.waveform
-                                // playbackSpeed is preserved from existing content
-                            )
-                            item.copy(uiMessage = item.uiMessage.copy(content = updatedVoiceContent))
-                        }
-
-                        is MessageTypeContent.AudioFile -> {
-                            val updatedAudioFileContent = content.copy(
-                                isPlaying = message.isPlayingVoiceMessage,
-                                isDownloading = message.isDownloadingVoiceMessage,
-                                durationSeconds = message.voiceMessageDuration,
-                                playedSeconds = message.voiceMessagePlayedSeconds,
-                                seekbarProgress = message.voiceMessageSeekbarProgress
-                            )
-                            item.copy(uiMessage = item.uiMessage.copy(content = updatedAudioFileContent))
-                        }
-
-                        else -> item
-                    }
-                } else {
-                    item
-                }
-            }
-
-            current.copy(items = updatedItems)
-        }
-    }
-
     // ------------------------------
     // Observe conversation
     // ------------------------------
@@ -1315,7 +1253,9 @@ class ChatViewModel @AssistedInject constructor(
         // getLastCommonReadFlow provides the "last read by all" value for read-receipt checkmarks.
         // These are two different concepts that must not be conflated.
         combine(
-            messagesFlow,
+            // the raw message list is tapped before the throttle and the UI mapping below: the read marker
+            // decisions must not depend on how far the rendered items lag behind the database
+            messagesFlow.onEach(::onMessagesChanged),
             getLastCommonReadFlow.onStart { emit(0) },
             parentMessagesFlow,
             combine(conversationFlow, _spreedCapabilities) { conv, caps -> conv to caps },
@@ -1567,11 +1507,13 @@ class ChatViewModel @AssistedInject constructor(
 
                 // The live-update mode (chat relay vs long polling) is decided in parallel: the
                 // initial load must never wait for the websocket to connect.
-                viewModelScope.launch {
-                    val isChatRelaySupported = withTimeoutOrNull(WEBSOCKET_CONNECT_TIMEOUT_MS) {
-                        awaitChatRelaySupport(user)
-                    } ?: false
-                    startMessagePolling(isChatRelaySupported)
+                if (messagePollingJob == null) {
+                    messagePollingJob = viewModelScope.launch {
+                        val isChatRelaySupported = withTimeoutOrNull(WEBSOCKET_CONNECT_TIMEOUT_MS) {
+                            awaitChatRelaySupport(user)
+                        } ?: false
+                        startMessagePolling(isChatRelaySupported)
+                    }
                 }
 
                 loadInitialMessages(
@@ -2117,6 +2059,19 @@ class ChatViewModel @AssistedInject constructor(
         }
     }
 
+    // Runs on the background dispatcher of the rebuild pipeline (flowOn in observeMessages): it only
+    // publishes the immutable list through a volatile field. localLastReadMessage is written on the main
+    // thread only, so the own message is combined with it when the marker is decided (readMarkerToSend).
+    //
+    // Only the list of the newest messages counts. A window around a quoted or searched message (search and
+    // old chat block mode) can lie far from them and miss the own message just sent, which must still be
+    // known when the chat is left from there.
+    private fun onMessagesChanged(messages: List<ChatMessage>) {
+        if (chatMode.value == ChatMode.DEFAULT_MODE || contextAnchorMessageId.value == null) {
+            latestMessages = messages
+        }
+    }
+
     fun advanceLocalLastReadMessageIfNeeded(messageId: Int) {
         Log.d(TAG, "advanceLocalLastReadMessageIfNeeded, messageId: $messageId")
         Log.d(TAG, "advanceLocalLastReadMessageIfNeeded, localLastReadMessage: $localLastReadMessage")
@@ -2144,10 +2099,25 @@ class ChatViewModel @AssistedInject constructor(
         val conversationLastReadMessage = _uiState.value.conversation?.lastReadMessage ?: return
         Log.d(TAG, "updateRemoteLastReadMessageIfNeeded, conversation.lastReadMessage: $conversationLastReadMessage")
 
-        if (localLastReadMessage > conversationLastReadMessage) {
-            Log.d(TAG, "updateRemoteLastReadMessageIfNeeded, setChatReadMessage...")
+        val messages = latestMessages
+        val newestOwnMessageId = newestOwnMessageId(messages)
+        val marker = localReadMarker(
+            localLastReadMessage = localLastReadMessage,
+            conversationLastReadMessage = conversationLastReadMessage,
+            newestOwnMessageId = newestOwnMessageId
+        )
+        if (marker != null) {
+            // The local read state is always written; only the server request waits for an own message
+            // that is still on its way (offline queue included), see readMarkerToSend.
+            val sendToServer = readMarkerToSend(
+                localLastReadMessage = localLastReadMessage,
+                conversationLastReadMessage = conversationLastReadMessage,
+                newestOwnMessageId = newestOwnMessageId,
+                hasUnconfirmedOwnMessage = hasUnconfirmedOwnMessage(messages)
+            ) != null
+            Log.d(TAG, "updateRemoteLastReadMessageIfNeeded, setChatReadMessage, sendToServer: $sendToServer")
 
-            setChatReadMessage(localLastReadMessage)
+            setChatReadMessage(marker, sendToServer)
         }
     }
 
@@ -2190,11 +2160,20 @@ class ChatViewModel @AssistedInject constructor(
         )
     }
 
-    fun setChatReadMessage(lastReadMessage: Int) {
+    fun setChatReadMessage(lastReadMessage: Int, sendToServer: Boolean = true) {
         // marking as read is the explicit counterpart of marking as unread and hands the read marker
         // back to the automatic handling
         keepMarkedAsUnread = false
         _uiState.update { it.copy(markedAsUnreadByUser = false) }
+        if (!sendToServer) {
+            // The marker waits for an own message that is on its way: show the lower unread count, but keep
+            // the stored marker and register nothing pending, so the marker is decided again (and sent) by
+            // the next call once the message is confirmed or failed.
+            viewModelScope.launch {
+                chatRepository.updateLocalUnreadCountOnly(lastReadMessage)
+            }
+            return
+        }
         chatRepository.markPendingReadMarker(lastReadMessage)
         viewModelScope.launch {
             chatRepository.updateLocalReadState(lastReadMessage)
@@ -2404,21 +2383,27 @@ class ChatViewModel @AssistedInject constructor(
     fun startAudioRecording(context: Context, currentConversation: ConversationModel) {
         audioFocusRequestManager.audioFocusRequest(true) {
             Log.d(TAG, "Recording Started")
-            mediaRecorderManager.start(context, currentConversation)
+            mediaRecorderManager.start(context, currentConversation, onSilenced = ::interruptAudioRecording)
             _getVoiceRecordingInProgress.postValue(true)
         }
     }
 
+    /** Stops the recorder whether or not the audio focus is given back, so the shown state never outlasts it. */
     fun stopAudioRecording() {
-        audioFocusRequestManager.audioFocusRequest(false) {
-            mediaRecorderManager.stop()
-            _getVoiceRecordingInProgress.postValue(false)
-            Log.d(TAG, "Recording stopped")
-        }
+        mediaRecorderManager.stop()
+        _getVoiceRecordingInProgress.postValue(false)
+        Log.d(TAG, "Recording stopped")
+        audioFocusRequestManager.audioFocusRequest(false) {}
     }
 
     fun stopAndSendAudioRecording(roomToken: String = "", replyToMessageId: Int? = null, displayName: String) {
         stopAudioRecording()
+
+        val voiceRecordFile = mediaRecorderManager.currentVoiceRecordFile
+        if (voiceRecordFile.isEmpty() || !File(voiceRecordFile).exists()) {
+            Log.w(TAG, "No voice recording file available. Nothing to upload")
+            return
+        }
 
         if (mediaRecorderManager.mediaRecorderState != MediaRecorderManager.MediaRecorderState.ERROR) {
             val uri = Uri.fromFile(File(mediaRecorderManager.currentVoiceRecordFile))
@@ -2443,7 +2428,29 @@ class ChatViewModel @AssistedInject constructor(
 
     fun getCurrentVoiceRecordFile(): String = mediaRecorderManager.currentVoiceRecordFile
 
+    /** Saves the picked contact as a vCard and uploads it, also when the chat is recreated meanwhile. */
     @Suppress("LongParameterList")
+    fun shareContact(contactUri: Uri, roomToken: String, replyToMessageId: Int?, displayName: String) {
+        val context = NextcloudTalkApplication.sharedApplication!!.applicationContext
+        viewModelScope.launch {
+            val file = runProviderCall(onFailure = { e -> logger.e(TAG, "Failed to read contact $contactUri", e) }) {
+                ContactUtils.saveContactAsVcfFile(context, contactUri)
+            }
+            if (file == null) {
+                _actionFailures.emit(R.string.nc_common_error_sorry)
+                return@launch
+            }
+            val shareUri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID, file)
+            uploadFile(
+                fileUri = shareUri.toString(),
+                isVoiceMessage = false,
+                roomToken = roomToken,
+                replyToMessageId = replyToMessageId,
+                displayName = displayName
+            )
+        }
+    }
+
     fun uploadFile(
         fileUri: String,
         isVoiceMessage: Boolean,
@@ -2509,6 +2516,8 @@ class ChatViewModel @AssistedInject constructor(
 
             // enqueued right here, in the order of the calls: the queue of a conversation is chained, and the
             // slow lookup of the file info below must neither reorder the files nor die with the view model
+            // the access the picker granted ends with the chat, while the upload can wait for the network
+            UploadSourceGrants.keep(NextcloudTalkApplication.sharedApplication!!, fileUri)
             val workerId = enqueueUpload()
             if (!isVoiceMessage) {
                 uploadReferenceToWorkId[referenceId] = workerId
@@ -2838,6 +2847,58 @@ class ChatViewModel @AssistedInject constructor(
         @VisibleForTesting
         fun holdsShare(messages: List<ChatMessageDto>?, referenceId: String): Boolean? =
             messages?.any { it.referenceId == referenceId }
+
+        /**
+         * Id of the newest message sent by the user that the server has already accepted, or null; the
+         * server marks everything up to it as read. Temporary messages (negative ids) are not accepted yet
+         * and are ignored.
+         */
+        internal fun newestOwnMessageId(messages: List<ChatMessage>): Int? =
+            messages.filter { !it.incoming && it.jsonMessageId > 0 }
+                .maxOfOrNull { it.jsonMessageId }
+
+        /**
+         * True while a text message of the user is on its way to the server: its temporary copy is stored
+         * and not failed, so the server may have accepted it (and moved the user's read marker to it)
+         * already, while its server copy is not in [messages] yet. This client must not send an older
+         * marker over it. A file placeholder is not counted before its upload is finished: the server has
+         * no message for it until then.
+         */
+        internal fun hasUnconfirmedOwnMessage(messages: List<ChatMessage>): Boolean =
+            messages.any { message ->
+                val isFileUploading = message.sendStatus != SendStatus.SENT_PENDING_ACK &&
+                    message.messageParameters.orEmpty().containsKey("file")
+                !message.incoming &&
+                    message.isTemporary &&
+                    message.sendStatus != SendStatus.FAILED &&
+                    !isFileUploading
+            }
+
+        /**
+         * The read marker to send to the server, or null when nothing has to be sent. The server sets the
+         * marker to a message at the moment the user sends it, so the client never sends a marker
+         * below the newest own message: that would move the marker back and leave the message with a
+         * single check mark for the other participants.
+         */
+        internal fun readMarkerToSend(
+            localLastReadMessage: Int,
+            conversationLastReadMessage: Int,
+            newestOwnMessageId: Int?,
+            hasUnconfirmedOwnMessage: Boolean
+        ): Int? =
+            localReadMarker(localLastReadMessage, conversationLastReadMessage, newestOwnMessageId)
+                .takeUnless { hasUnconfirmedOwnMessage }
+
+        /**
+         * The read marker to write into the local conversation state, or null when it has it already.
+         * Unlike [readMarkerToSend] it does not wait for an own message that is on its way: the local state
+         * is not sent anywhere, so the conversation list loses its unread count right away, also offline.
+         */
+        internal fun localReadMarker(
+            localLastReadMessage: Int,
+            conversationLastReadMessage: Int,
+            newestOwnMessageId: Int?
+        ): Int? = maxOf(localLastReadMessage, newestOwnMessageId ?: 0).takeIf { it > conversationLastReadMessage }
 
         /**
          * Ids of the messages a delete of [messageId] applies to: every already-uploaded message of the

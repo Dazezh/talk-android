@@ -138,6 +138,8 @@
     <string name="nc_announcement">Annonce</string>
     <string name="nc_announcement_description">Conversation pour les administrateurs, destinée à informer une audience fixe, qui ne peut pas être quittée.</string>
     <string name="nc_attendee_pin">Épingler : %1$s</string>
+    <string name="nc_audio_error_generic">Impossible de lire l\'audio</string>
+    <string name="nc_audio_error_network">Impossible de charger l\'audio. Vérifiez votre connexion.</string>
     <string name="nc_audio_error_unavailable">Le fichier audio n\'est pas disponible</string>
     <string name="nc_audio_error_unsupported">Le format audio n\'est pas pris en charge</string>
     <string name="nc_audio_player_close">Arrêter la lecture</string>
@@ -180,6 +182,9 @@
     <string name="nc_call_timeout">Aucune réponse depuis 45 secondes, appuyez pour essayer à nouveau</string>
     <string name="nc_call_unknown">%s appel</string>
     <string name="nc_call_video">%s appel vidéo</string>
+    <string name="nc_call_view_mode_grid">Vue en grille</string>
+    <string name="nc_call_view_mode_speaker">Vue intervenant</string>
+    <string name="nc_call_view_mode_speaker_with_participant_bar">Vue de l\'intervenant avec le panneau des participants</string>
     <string name="nc_call_voice">%s appel audio</string>
     <string name="nc_camera_permission_hint">Pour activer la communication vidéo, merci de donner l\'autorisation « Appareil photo ».</string>
     <string name="nc_cancel">Annuler</string>
@@ -532,6 +537,7 @@
     <string name="nc_screen_lock_timeout_three_hundred">300</string>
     <string name="nc_screen_sharing_failed">Le partage d\'écran n\'a pas pu être démarré</string>
     <string name="nc_screen_sharing_not_allowed">Vous n\'êtes pas autorisé à partager votre écran</string>
+    <string name="nc_screen_sharing_not_connected">Vous pouvez partager votre écran une fois connecté à l\'appel</string>
     <string name="nc_screen_sharing_permissions_missing">Pour partager votre écran, autoriser les notifications et l\'accès au microphone</string>
     <string name="nc_search">Recherche</string>
     <string name="nc_search_clear">Effacer la recherche</string>
@@ -689,6 +695,7 @@
     <string name="nc_voice_message">Message vocal</string>
     <string name="nc_voice_message_hold_to_record_info">Maintenir pour enregistrer, relâcher pour envoyer.</string>
     <string name="nc_voice_message_missing_audio_permission">La permission d\'enregistrer l\'audio est requise</string>
+    <string name="nc_voice_message_recording_interrupted">Enregistrement arrêté</string>
     <string name="nc_voice_message_slide_to_cancel">« Balayer pour annuler</string>
     <string name="nc_webinar">Webinaire</string>
     <string name="nc_webinar_description">Conversation restreinte avec salle d\'attente activée, idéale pour les webinaires publics</string>

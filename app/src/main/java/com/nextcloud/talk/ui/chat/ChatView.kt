@@ -385,7 +385,7 @@ fun ChatView(
             reverseLayout = true,
             // 4dp between grouped messages; messages that start a new author add 2dp in their own padding.
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            contentPadding = PaddingValues(bottom = 20.dp),
+            contentPadding = PaddingValues(top = state.stickyHeaderTopOffset, bottom = 20.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .semantics {

@@ -68,13 +68,13 @@ import androidx.lifecycle.lifecycleScope
 import autodagger.AutoInjector
 import com.nextcloud.talk.R
 import com.nextcloud.talk.activities.BaseActivity
-import com.nextcloud.talk.activities.MainActivity
 import com.nextcloud.talk.application.NextcloudTalkApplication
 import com.nextcloud.talk.chat.wallpaper.ChatWallpaper
 import com.nextcloud.talk.chat.wallpaper.ChatWallpaperRepository
 import com.nextcloud.talk.chat.wallpaper.loadWallpaperImage
 import com.nextcloud.talk.components.ColoredStatusBar
 import com.nextcloud.talk.components.StandardAppBar
+import com.nextcloud.talk.conversationlist.ConversationsListActivity
 import com.nextcloud.talk.data.user.model.User
 import com.nextcloud.talk.utils.preferences.RalkAppearancePreferences
 import com.nextcloud.talk.utils.preferences.StickerSize
@@ -296,7 +296,7 @@ class ChatSettingsActivity : BaseActivity() {
      */
     private fun restartApp() {
         startActivity(
-            Intent(this, MainActivity::class.java)
+            Intent(this, ConversationsListActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         )
         finishAffinity()

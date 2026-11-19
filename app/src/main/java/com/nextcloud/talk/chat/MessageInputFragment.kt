@@ -43,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -304,6 +305,14 @@ class MessageInputFragment : Fragment() {
                 }
 
                 else -> {}
+            }
+        }
+
+        // a held recording can also end without a touch, e.g. when the app goes to the background
+        chatActivity.chatViewModel.getVoiceRecordingInProgress.observe(viewLifecycleOwner) { inProgress ->
+            if (!inProgress && binding.fragmentMessageInputView.microphoneEnabledInfo.isVisible) {
+                showRecordAudioUi(false)
+                resetSlider()
             }
         }
 
@@ -619,10 +628,13 @@ class MessageInputFragment : Fragment() {
         var prevDx = 0f
         var voiceRecordStartTime = 0L
         var voiceRecordEndTime: Long
+        // only true when recording was started by the current touch gesture (not when permissions were requested)
+        var isRecordingGesture = false
         binding.fragmentMessageInputView.recordAudioButton.setOnTouchListener { v, event ->
             v?.performClick()
             when (event?.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    isRecordingGesture = false
                     if (!chatActivity.isRecordAudioPermissionGranted()) {
                         chatActivity.requestRecordAudioPermissions()
                         return@setOnTouchListener true
@@ -639,11 +651,16 @@ class MessageInputFragment : Fragment() {
                     binding.fragmentMessageInputView.audioRecordDuration.start()
                     chatActivity.chatViewModel.startAudioRecording(requireContext(), chatActivity.currentConversation!!)
                     showRecordAudioUi(true)
+                    isRecordingGesture = true
                     prevDx = event.x
                 }
 
                 MotionEvent.ACTION_CANCEL -> {
                     Log.d(TAG, "ACTION_CANCEL")
+                    if (!isRecordingGesture) {
+                        return@setOnTouchListener true
+                    }
+                    isRecordingGesture = false
                     if (chatActivity.chatViewModel.getVoiceRecordingInProgress.value == false ||
                         !chatActivity.isRecordAudioPermissionGranted()
                     ) {
@@ -658,6 +675,10 @@ class MessageInputFragment : Fragment() {
 
                 MotionEvent.ACTION_UP -> {
                     Log.d(TAG, "ACTION_UP")
+                    if (!isRecordingGesture) {
+                        return@setOnTouchListener false
+                    }
+                    isRecordingGesture = false
                     if (chatActivity.chatViewModel.getVoiceRecordingInProgress.value == false ||
                         chatActivity.chatViewModel.getVoiceRecordingLocked.value == true ||
                         !chatActivity.isRecordAudioPermissionGranted()
@@ -687,7 +708,8 @@ class MessageInputFragment : Fragment() {
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    if (chatActivity.chatViewModel.getVoiceRecordingInProgress.value == false ||
+                    if (!isRecordingGesture ||
+                        chatActivity.chatViewModel.getVoiceRecordingInProgress.value == false ||
                         !chatActivity.isRecordAudioPermissionGranted()
                     ) {
                         return@setOnTouchListener false
@@ -1049,9 +1071,7 @@ class MessageInputFragment : Fragment() {
 
         override fun recordSelection(emoji: String) {
             val updated = listOf(emoji) + getStoredList().filterNot { it == emoji }
-            prefs.edit()
-                .putString("recent", updated.take(MAX_STORED_RECENT_EMOJIS).joinToString(","))
-                .apply()
+            prefs.edit { putString("recent", updated.take(MAX_STORED_RECENT_EMOJIS).joinToString(",")) }
         }
 
         override suspend fun getRecentEmojiList(): List<String> = getStoredList()
