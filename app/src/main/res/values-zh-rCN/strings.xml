@@ -116,6 +116,8 @@
     <string name="nc_call_timeout">45秒内无响应，点击以重试</string>
     <string name="nc_call_unknown">%s 通话</string>
     <string name="nc_call_video">%s 语音通话</string>
+    <string name="nc_call_view_mode_grid">网格视图</string>
+    <string name="nc_call_view_mode_speaker">扬声器视图</string>
     <string name="nc_call_voice">%s 语音通话</string>
     <string name="nc_camera_permission_hint">使用视频通话需要“相机”权限</string>
     <string name="nc_cancel">取消</string>
@@ -213,6 +215,7 @@
     <string name="nc_expire_messages">聊天内容过期</string>
     <string name="nc_expire_messages_explanation">可指定聊天消息在一定时间后过期。注意：聊天中分享的文件不会被从所有者一方删除，但是会被从对话中取消分享。</string>
     <string name="nc_external_server_failed">获取网络设置失败</string>
+    <string name="nc_federated_user">联合云用户</string>
     <string name="nc_federation_invitation_accept">接受</string>
     <string name="nc_federation_invitation_reject">拒绝</string>
     <string name="nc_federation_no_invitations">没有待处理的邀请</string>
@@ -617,4 +620,4 @@
     <plurals name="polls_amount_voters">
         <item quantity="other">%d 票</item>
     </plurals>
-</resources>
+    </resources>

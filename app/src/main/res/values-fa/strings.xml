@@ -160,6 +160,8 @@
     <string name="nc_call_timeout">در ۴۵ ثانیه پاسخی وجود نداشت، برای آزمایش دوباره ضربه بزنید</string>
     <string name="nc_call_unknown">تماس %s</string>
     <string name="nc_call_video">تماس ویدئویی %s</string>
+    <string name="nc_call_view_mode_grid">نمای شبکه</string>
+    <string name="nc_call_view_mode_speaker">نمای سخنران</string>
     <string name="nc_call_voice">تماس صوتی %s</string>
     <string name="nc_camera_permission_hint">برای فعال‌سازی ارتباط ویدئویی، لطفاً مجوز «دوربین» را اعطا کنید.</string>
     <string name="nc_cancel">لغو</string>
@@ -268,6 +270,7 @@
     <string name="nc_expire_messages">انقضای پیام‌های چت</string>
     <string name="nc_expire_messages_explanation">پیام‌های چت می‌توانند پس از مدت زمان مشخصی منقضی شوند. توجه: فایل‌های به اشتراک‌گذاشته شده در چت برای مالک حذف نخواهند شد، اما دیگر در مکالمه به اشتراک گذاشته نمی‌شوند.</string>
     <string name="nc_external_server_failed">دریافت تنظیمات سیگنال ناموفق بود</string>
+    <string name="nc_federated_user">کاربر فدرال</string>
     <string name="nc_federation_invitation_accept">تایید</string>
     <string name="nc_federation_invitation_reject">رد کردن</string>
     <string name="nc_federation_invited_to_room">از %1$s در %2$s</string>
@@ -804,4 +807,4 @@
         <item quantity="one">%d vote</item>
         <item quantity="other">%d رای</item>
     </plurals>
-</resources>
+    </resources>

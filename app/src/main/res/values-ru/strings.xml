@@ -917,6 +917,7 @@
     <string name="nc_conversation_type_sip">Включён вход по телефону и SIP</string>
     <string name="nc_conversation_type_sip_no_pin">Разрешён вход без PIN-кода</string>
     <string name="nc_conversation_types_error">Не удалось загрузить типы обсуждений</string>
+    <string name="nc_federated_user">Федеративный пользователь</string>
     <string name="nc_hq_toggle">HQ</string>
     <string name="nc_hq_toggle_description">Высокое качество, без сжатия</string>
     <string name="nc_login_too_many_attempts">Слишком много неудачных попыток входа из этой сети. Повторите попытку позже.</string>

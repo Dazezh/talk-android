@@ -87,6 +87,8 @@
     <string name="nc_call_reconnecting">Yhdistetään uudelleen …</string>
     <string name="nc_call_ringing">SOITETAAN</string>
     <string name="nc_call_timeout">Ei vastausta 45 sekunnissa, napauta yrittääksesi uudelleen</string>
+    <string name="nc_call_view_mode_grid">Ruudukkonäkymä</string>
+    <string name="nc_call_view_mode_speaker">Puhujan näkymä</string>
     <string name="nc_cancel">Peruuta</string>
     <string name="nc_certificate_dialog_title">Tarkista varmenne</string>
     <string name="nc_certificate_error">SSL-asetukset esti yhteyden</string>
@@ -168,6 +170,7 @@
     <string name="nc_expire_message_one_hour">1 tunti</string>
     <string name="nc_expire_message_one_week">1 viikko</string>
     <string name="nc_expire_messages_explanation">Keskusteluviestit on mahdollista vanhentaa tietyn ajan jälkeen. Huomio: Keskustelussa jaetut tiedostot eivät poistu omistajalta, mutta ne eivät ole enää jaettu keskustelussa.</string>
+    <string name="nc_federated_user">Federoitu käyttäjä</string>
     <string name="nc_federation_invitation_accept">Hyväksy</string>
     <string name="nc_federation_invitation_reject">Hylkää</string>
     <string name="nc_federation_no_invitations">Ei odottavia kutsuja</string>
@@ -470,4 +473,4 @@
         <item quantity="one">%d ääni</item>
         <item quantity="other">%d ääntä</item>
     </plurals>
-</resources>
+    </resources>

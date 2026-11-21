@@ -97,6 +97,8 @@
     <string name="nc_call_timeout">45초 동안 응답이 없다면 다시 시도하기를 눌러주십시오.</string>
     <string name="nc_call_unknown">%s 통화</string>
     <string name="nc_call_video">%s 영상 통화</string>
+    <string name="nc_call_view_mode_grid">바둑판식 보기</string>
+    <string name="nc_call_view_mode_speaker">말하는 사람 보기</string>
     <string name="nc_call_voice">%s 음성 통화</string>
     <string name="nc_cancel">취소</string>
     <string name="nc_capabilities_failed">기능을 가져올 수 없음,  중단함</string>
@@ -181,6 +183,7 @@
     <string name="nc_expire_messages">채팅 메시지 만료</string>
     <string name="nc_expire_messages_explanation">채팅 메시지가 특정 시간 이후에 만료될 수 있습니다. 참고: 채팅에서 공유된 파일들은 소유자에게서 삭제 되지 않지만, 대화에서 더이상 공유되지 않습니다.</string>
     <string name="nc_external_server_failed">신호 설정을 가져오지 못함</string>
+    <string name="nc_federated_user">연합 사용자</string>
     <string name="nc_federation_invitation_accept">수락</string>
     <string name="nc_federation_invitation_reject">거부</string>
     <string name="nc_file_browser_back">뒤로</string>
@@ -529,4 +532,4 @@
     <plurals name="polls_amount_voters">
         <item quantity="other">%d 표</item>
     </plurals>
-</resources>
+    </resources>

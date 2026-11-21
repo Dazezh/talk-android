@@ -905,6 +905,7 @@
         <item quantity="other">%d röster</item>
     </plurals>
     <string name="nc_call_button_content_description_switch_camera">Växla kamera</string>
+    <string name="nc_federated_user">Federerad användare</string>
     <string name="nc_login_too_many_attempts">För många misslyckade inloggningsförsök från det här nätverket. Försök igen senare.</string>
     <string name="nc_message_not_added_to_notes">Kunde inte lägga till meddelandet i anteckningar</string>
     <string name="nc_notification_channel_calls_ongoing">Pågående samtal</string>

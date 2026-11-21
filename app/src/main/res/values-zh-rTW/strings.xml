@@ -179,6 +179,7 @@
     <string name="nc_call_ongoing_notification_end_action">結束通話</string>
     <string name="nc_call_ongoing_notification_return_action">回到通話</string>
     <string name="nc_call_ongoing_notification_screen_sharing">您正在分享螢幕</string>
+    <string name="nc_call_participant_bar_scroll_to_start">捲動到第一個參與者</string>
     <string name="nc_call_raised_hand">%1$s 舉手</string>
     <string name="nc_call_reconnecting">正在重新連線 …</string>
     <string name="nc_call_ringing">鈴響聲</string>
@@ -190,6 +191,10 @@
     <string name="nc_call_timeout">在45秒內無回應，請點按以重試</string>
     <string name="nc_call_unknown">%s 通話</string>
     <string name="nc_call_video">%s 視訊通話</string>
+    <string name="nc_call_view_mode">通話檢視模式</string>
+    <string name="nc_call_view_mode_grid">格狀檢視</string>
+    <string name="nc_call_view_mode_speaker">演講者檢視</string>
+    <string name="nc_call_view_mode_speaker_with_participant_bar">附參與者列的講者檢視</string>
     <string name="nc_call_voice">%s 語音通話</string>
     <string name="nc_camera_permission_hint">要啟用影像通訊，請授予「相機」權限。</string>
     <string name="nc_cancel">取消</string>
@@ -330,6 +335,7 @@
     <string name="nc_expire_messages">過期聊天訊息</string>
     <string name="nc_expire_messages_explanation">聊天訊息可能會在一定時間後逾期。注意: 在聊天中分享的檔案不會為所有者刪除，但將不再於對話中被分享。</string>
     <string name="nc_external_server_failed">汲取訊號設定失敗</string>
+    <string name="nc_federated_user">聯盟使用者</string>
     <string name="nc_federation_invitation_accept">接受</string>
     <string name="nc_federation_invitation_reject">回絕</string>
     <string name="nc_federation_invited_to_room">從 %1$s 於 %2$s</string>
@@ -343,6 +349,7 @@
     <string name="nc_following_link">使用者追隨一個公開連結</string>
     <string name="nc_formatted_message_you">你: %1$s</string>
     <string name="nc_forward_message">轉貼</string>
+    <string name="nc_forward_to">轉傳至</string>
     <string name="nc_forward_to_three_dots">轉貼到…</string>
     <string name="nc_gallery">相簿</string>
     <string name="nc_get_from_provider">您沒有自己的伺服器嗎？\n點這裡向服務供應商購買</string>
@@ -386,6 +393,9 @@
     <string name="nc_lobby_start_date">此會議預定於 %1$s 開始</string>
     <string name="nc_lobby_start_soon">會議即將開始</string>
     <string name="nc_lobby_waiting">您目前正於大廳等候。</string>
+    <string name="nc_local_network_permission_denied">允許存取區域網路以連線至此伺服器。</string>
+    <string name="nc_local_network_permission_message">此伺服器在您的區域網路上。其僅能在有「鄰近裝置」權限時連線。若未提供此權限，則會連線失敗。</string>
+    <string name="nc_local_network_permission_title">允許存取區域網路</string>
     <string name="nc_location_current_position_description">您目前的位置</string>
     <string name="nc_location_unknown">位置不明</string>
     <string name="nc_locked">已鎖定</string>
@@ -661,6 +671,7 @@
     <string name="nc_shared_items_deck_card">看板卡片</string>
     <string name="nc_shared_items_description">圖片、檔案、語音訊息……</string>
     <string name="nc_shared_items_empty">無已分享項目</string>
+    <string name="nc_shared_items_error">無法載入分享的項目</string>
     <string name="nc_shared_items_location">路徑</string>
     <string name="nc_shared_location">共享的位置</string>
     <string name="nc_shortcut_conversation_deleted">此對話不存在</string>
@@ -701,6 +712,7 @@
     <string name="nc_voice_message">音訊訊息</string>
     <string name="nc_voice_message_hold_to_record_info">按住以錄音，放開以傳送</string>
     <string name="nc_voice_message_missing_audio_permission">需要錄音權限</string>
+    <string name="nc_voice_message_recording_interrupted">已停止錄製</string>
     <string name="nc_voice_message_slide_to_cancel">« 滑動取消</string>
     <string name="nc_webinar">網路研討會</string>
     <string name="nc_webinar_description">啟用大廳功能的受限對話，非常適合公開網路研討會</string>
@@ -908,4 +920,4 @@
     <plurals name="polls_amount_voters">
         <item quantity="other">%d 票</item>
     </plurals>
-</resources>
+    </resources>

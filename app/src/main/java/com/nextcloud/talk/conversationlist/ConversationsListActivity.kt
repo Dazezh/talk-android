@@ -1062,8 +1062,14 @@ class ConversationsListActivity : BaseActivity() {
         )
     }
 
-    private fun clearIntentAction() {
+    /**
+     * Clears the shared content once it was passed on to the chat: the list stays below the chat, so the next chat
+     * opened from it would get the shared files again and show their attachment preview.
+     */
+    private fun clearSharedData() {
         intent.action = ""
+        filesToShare = null
+        textToPaste = ""
     }
 
     @Suppress("Detekt.TooGenericExceptionCaught")
@@ -1315,7 +1321,7 @@ class ConversationsListActivity : BaseActivity() {
         val intent = ChatActivity.createIntent(context, currentUser.id!!, selectedConversation!!.token, bundle)
         startActivity(intent)
 
-        clearIntentAction()
+        clearSharedData()
     }
 
     @Subscribe(sticky = true, threadMode = ThreadMode.BACKGROUND)

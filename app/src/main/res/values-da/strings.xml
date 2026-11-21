@@ -910,6 +910,7 @@
     <string name="nc_conversation_type_sip">Telefon- og SIP-indringning slået til</string>
     <string name="nc_conversation_type_sip_no_pin">Indringning uden PIN-kode tilladt</string>
     <string name="nc_conversation_types_error">Samtaletyperne kunne ikke indlæses</string>
+    <string name="nc_federated_user">Fødereret bruger</string>
     <string name="nc_login_too_many_attempts">For mange mislykkede loginforsøg fra dette netværk. Prøv igen senere.</string>
     <string name="nc_message_not_added_to_notes">Beskeden kunne ikke tilføjes til noter</string>
     <string name="nc_password_required">Denne server kræver en adgangskode til samtaler, som gæster kan deltage i</string>

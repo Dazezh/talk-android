@@ -15,6 +15,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import com.nextcloud.talk.chat.data.ChatMessageRepository
 import com.nextcloud.talk.chat.data.io.AudioFocusRequestManager
 import com.nextcloud.talk.chat.data.io.MediaRecorderManager
@@ -32,6 +33,10 @@ import com.nextcloud.talk.models.json.generic.GenericMetaDto
 import com.nextcloud.talk.models.json.generic.GenericOCS
 import com.nextcloud.talk.models.json.generic.GenericOverall
 import com.nextcloud.talk.models.json.participants.ParticipantDto
+import com.nextcloud.talk.models.json.threads.ThreadDto
+import com.nextcloud.talk.models.json.threads.ThreadInfoDto
+import com.nextcloud.talk.models.json.threads.ThreadsOCS
+import com.nextcloud.talk.models.json.threads.ThreadsOverall
 import com.nextcloud.talk.repositories.reactions.ReactionsRepository
 import com.nextcloud.talk.repositories.unifiedsearch.UnifiedSearchRepository
 import com.nextcloud.talk.threadsoverview.data.ThreadsRepository
@@ -45,14 +50,22 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -63,11 +76,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mockito
 import org.mockito.kotlin.any
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.doSuspendableAnswer
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyBlocking
 import org.mockito.kotlin.whenever
 import org.mockito.kotlin.wheneverBlocking
 import org.robolectric.RobolectricTestRunner
@@ -92,12 +108,16 @@ class ChatViewModelRoomJoinTest {
     private var pendingLeave: CompletableDeferred<Unit>? = null
 
     private lateinit var viewModel: ChatViewModel
+    private lateinit var chatRepository: ChatMessageRepository
+    private lateinit var createViewModel: (threadId: Long?) -> ChatViewModel
+    private val threadsRepository: ThreadsRepository = mock()
     private var capabilitiesState: ChatViewModel.ViewState? = null
     private var initialLoads = 0
     private var joins = 0
     private var screenResumed = false
     private var initialLoadDone = false
     private val viewModelStore = ViewModelStore()
+    private val viewModelJobs = mutableListOf<Job>()
     private val appScope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher())
 
     private class TestOwner : LifecycleOwner {
@@ -121,32 +141,42 @@ class ChatViewModelRoomJoinTest {
             pendingLeave?.await()
             GenericOverall(GenericOCS(GenericMetaDto(statusCode = HTTP_OK)))
         }
-        val chatRepository: ChatMessageRepository = mockWithEmptyFlows()
+        chatRepository = mockWithEmptyFlows()
+        // Stubbed before any viewmodel exists: the message pipeline of a viewmodel calls the repository from
+        // Dispatchers.Default, and a call between observeThreadReplies() and thenReturn() would take the stub,
+        // leaving the thread's replies on the default empty flow.
+        whenever(chatRepository.observeThreadReplies(any(), eq(THREAD_ID.toLong())))
+            .thenReturn(flowOf(null, 3, 3, THREAD_REPLIES))
+        createViewModel = { threadId ->
+            val newViewModel = ChatViewModel(
+                mock<Logger>(),
+                mock<AppPreferences>(),
+                network,
+                chatRepository,
+                threadsRepository,
+                conversations,
+                mock<ReactionsRepository>(),
+                mock<UnifiedSearchRepository>(),
+                mock<MediaRecorderManager>(),
+                mock<AudioFocusRequestManager>(),
+                userManager,
+                appScope,
+                USER,
+                TOKEN,
+                threadId
+            )
+            // every viewmodel goes into the store, so that tearDown clears it like the screen would
+            ViewModelProvider(
+                viewModelStore,
+                object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T = newViewModel as T
+                }
+            )["chat-${viewModelJobs.size}", ChatViewModel::class.java]
+                .also { viewModelJobs += it.viewModelScope.coroutineContext.job }
+        }
 
-        val newViewModel = ChatViewModel(
-            mock<Logger>(),
-            mock<AppPreferences>(),
-            network,
-            chatRepository,
-            mock<ThreadsRepository>(),
-            conversations,
-            mock<ReactionsRepository>(),
-            mock<UnifiedSearchRepository>(),
-            mock<MediaRecorderManager>(),
-            mock<AudioFocusRequestManager>(),
-            userManager,
-            appScope,
-            USER,
-            TOKEN,
-            null
-        )
-        viewModel = ViewModelProvider(
-            viewModelStore,
-            object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T = newViewModel as T
-            }
-        )[ChatViewModel::class.java]
+        viewModel = createViewModel(null)
         owner.lifecycle.addObserver(viewModel)
 
         // what ChatActivity does with the state of the capabilities and with a resume of the screen
@@ -177,6 +207,9 @@ class ChatViewModelRoomJoinTest {
     fun tearDown() {
         owner.send(Lifecycle.Event.ON_DESTROY)
         viewModelStore.clear()
+        // The message pipeline of a viewmodel runs on Dispatchers.Default and hands its results to Main. Cancelled,
+        // it may still be finishing there: wait for it, or it uses Main while resetMain() below replaces it.
+        runBlocking { withTimeout(FLOW_TIMEOUT_MS) { viewModelJobs.joinAll() } }
         appScope.cancel()
         RxJavaPlugins.reset()
         RxAndroidPlugins.reset()
@@ -362,6 +395,62 @@ class ChatViewModelRoomJoinTest {
         assertTrue(capabilitiesState is ChatViewModel.GetCapabilitiesUpdateState)
     }
 
+    @Test
+    fun `opening the main chat writes the reply counts of the recent threads into the cached thread roots`() {
+        whenever(network.getCapabilities(any(), any())).thenReturn(
+            Observable.just(SpreedCapabilityDto(features = listOf("threads"), config = null, version = ""))
+        )
+        wheneverBlocking { threadsRepository.getThreads(any(), any(), any()) }.doReturn(
+            ThreadsOverall(
+                ThreadsOCS(
+                    meta = null,
+                    data = listOf(
+                        ThreadInfoDto(thread = ThreadDto(id = THREAD_ID, numReplies = THREAD_REPLIES))
+                    )
+                )
+            )
+        )
+        conversation.value = ConversationResult.Found(conversationModel(5, remoteServer = REMOTE_SERVER))
+
+        owner.send(Lifecycle.Event.ON_CREATE)
+        viewModel.initData()
+
+        verifyBlocking(threadsRepository) { getThreads(any(), any(), eq(MAX_RECENT_THREADS)) }
+        verifyBlocking(chatRepository) { updateThreadReplies(mapOf(THREAD_ID.toLong() to THREAD_REPLIES)) }
+    }
+
+    @Test
+    fun `opening the main chat does not ask for threads when the server has none`() {
+        whenever(network.getCapabilities(any(), any())).thenReturn(Observable.just(SpreedCapabilityDto()))
+        conversation.value = ConversationResult.Found(conversationModel(5, remoteServer = REMOTE_SERVER))
+
+        owner.send(Lifecycle.Event.ON_CREATE)
+        viewModel.initData()
+
+        verifyBlocking(threadsRepository, never()) { getThreads(any(), any(), any()) }
+    }
+
+    @Test
+    fun `inside a thread the reply count follows the cached thread messages`() =
+        runBlocking {
+            owner.send(Lifecycle.Event.ON_CREATE)
+
+            // the flow never completes, so without the timeout too few values would hang the test
+            val replies = withTimeout(FLOW_TIMEOUT_MS) {
+                createViewModel(THREAD_ID.toLong()).cachedThreadReplies.take(2).toList()
+            }
+
+            assertEquals(listOf(3, THREAD_REPLIES), replies)
+        }
+
+    @Test
+    fun `the main chat has no thread reply count`() =
+        runBlocking {
+            owner.send(Lifecycle.Event.ON_CREATE)
+
+            assertEquals(emptyList<Int>(), viewModel.cachedThreadReplies.toList())
+        }
+
     private fun conversationModel(lastReadMessage: Int, remoteServer: String = ""): ConversationModel =
         ConversationModel.mapToConversationModel(
             ConversationDto(
@@ -396,6 +485,10 @@ class ChatViewModelRoomJoinTest {
         private const val TOKEN = "room-token"
         private const val HTTP_OK = 200
         private const val REMOTE_SERVER = "https://remote.example.com"
+        private const val THREAD_ID = 100
+        private const val THREAD_REPLIES = 23
+        private const val MAX_RECENT_THREADS = 50
+        private const val FLOW_TIMEOUT_MS = 5000L
         private val USER = User(
             id = 1,
             userId = "me",

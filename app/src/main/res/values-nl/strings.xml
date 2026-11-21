@@ -146,6 +146,8 @@
     <string name="nc_call_timeout">Geen reactie binnen 45 seconden, tap om het opnieuw te proberen.</string>
     <string name="nc_call_unknown">%s oproep</string>
     <string name="nc_call_video">%s videogesprek</string>
+    <string name="nc_call_view_mode_grid">Rasterweergave</string>
+    <string name="nc_call_view_mode_speaker">Sprekerweergave</string>
     <string name="nc_call_voice">%s gesprek</string>
     <string name="nc_camera_permission_hint">Om videogesprekken te houden, verleen \"Camera\" machtiging.</string>
     <string name="nc_cancel">Annuleren</string>
@@ -250,6 +252,7 @@
     <string name="nc_expire_messages">Laat chatberichten vervallen</string>
     <string name="nc_expire_messages_explanation">Chatberichten kunnen na een bepaalde tijd verlopen. Noot: Bestanden die gedeeld zijn in een chat worden niet verwijderd door de eieganaar, maar worden niet langer gedeeld in het gesprek.</string>
     <string name="nc_external_server_failed">Kon signaleringsinstellingen niet ophalen</string>
+    <string name="nc_federated_user">Gefedereerde gebruiker</string>
     <string name="nc_federation_invitation_accept">Accepteren</string>
     <string name="nc_federation_invitation_reject">Afkeuren</string>
     <string name="nc_federation_invited_to_room">van %1$s op %2$s</string>
@@ -734,4 +737,4 @@ Kies er eentje van een provider.</string>
         <item quantity="one">%d stem</item>
         <item quantity="other">%d stemmen</item>
     </plurals>
-</resources>
+    </resources>

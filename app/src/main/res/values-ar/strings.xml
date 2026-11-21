@@ -134,6 +134,8 @@
     <string name="nc_call_timeout">لا يوجد استجابة خلال 45 ثانية ، انقر للمحاولة مرة أخرى</string>
     <string name="nc_call_unknown">%s اتصال</string>
     <string name="nc_call_video">%s اتصال فيديو</string>
+    <string name="nc_call_view_mode_grid">عرض كمخطط</string>
+    <string name="nc_call_view_mode_speaker">عرض المتحدث</string>
     <string name="nc_call_voice">%s اتصال صوتي</string>
     <string name="nc_camera_permission_hint">لتمكين اتصال الفيديو ، يرجى منح إذن \"الكاميرا\".</string>
     <string name="nc_cancel">إلغاء</string>
@@ -236,6 +238,7 @@
     <string name="nc_expire_messages">إنهاء صلاحية رسائل الدردشة</string>
     <string name="nc_expire_messages_explanation">يمكن أن تنتهي صلاحية رسائل الدردشة بعد وقت معين. ملاحظة: لن يتم حذف الملفات التي تمّت مشاركتها في الدردشة عند المالك، و لكن لن تستمر مشاركتها مع الآخرين في المحادثة.</string>
     <string name="nc_external_server_failed">فشل جلب إعدادات الإشارات</string>
+    <string name="nc_federated_user">مستخدم السحابة الموحدة</string>
     <string name="nc_federation_invitation_accept">قبول</string>
     <string name="nc_federation_invitation_reject">رفض</string>
     <string name="nc_federation_invited_to_room">من %1$s في %2$s</string>
@@ -481,6 +484,7 @@
     <string name="nc_show_notification_warning_title">أظِهر تحذيراً بالإشعارات الاعتيادية</string>
     <string name="nc_sort_by">رتِّب حسب</string>
     <string name="nc_start_group_chat">إبدأ الدردشة الجماعية</string>
+    <string name="nc_start_screen_sharing">مشاركة الشاشة</string>
     <string name="nc_start_time">وقت البدء</string>
     <string name="nc_switch_account">تبديل الحساب</string>
     <string name="nc_team">الفريق</string>
@@ -663,4 +667,4 @@
         <item quantity="many">%d أصوات</item>
         <item quantity="other">%d أصوات</item>
     </plurals>
-</resources>
+    </resources>

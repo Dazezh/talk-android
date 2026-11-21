@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.nextcloud.talk.R
 import com.nextcloud.talk.chat.ui.model.ChatMessageUi
 import com.nextcloud.talk.utils.DateUtils
+import com.nextcloud.talk.utils.DisplayUtils
 
 private const val TIME_TEXT_SIZE = 12
 private const val SYSTEM_PILL_MAX_WIDTH_FRACTION = 0.78f
@@ -65,9 +66,7 @@ fun SystemMessage(message: ChatMessageUi) {
     } else {
         val textStyle = systemMessageTextStyle
         val addLineBreaks = remember(message.id, message.plainMessage) { mutableStateOf(false) }
-        val (annotated, inlineContent) = remember(message, textStyle, addLineBreaks.value) {
-            buildSystemMessageContent(message, textStyle, addLineBreaks.value)
-        }
+        val (annotated, inlineContent) = rememberSystemMessageContent(message, textStyle, addLineBreaks.value)
         val highlightedAnnotated = remember(annotated, highlightSearchTerm) {
             annotated.withSearchHighlight(highlightSearchTerm)
         }
@@ -112,7 +111,7 @@ fun SystemMessage(message: ChatMessageUi) {
 private fun ExpandableSystemMessage(message: ChatMessageUi, highlightSearchTerm: String?) {
     val chevronRes = if (message.isExpanded) R.drawable.ic_keyboard_arrow_up else R.drawable.ic_keyboard_arrow_down
     val textStyle = systemMessageTextStyle
-    val (annotated, inlineContent) = buildSystemMessageContent(message, textStyle)
+    val (annotated, inlineContent) = rememberSystemMessageContent(message, textStyle)
     val highlightedAnnotated = remember(annotated, highlightSearchTerm) {
         annotated.withSearchHighlight(highlightSearchTerm)
     }
@@ -155,9 +154,22 @@ private fun ExpandableSystemMessage(message: ChatMessageUi, highlightSearchTerm:
 
 private val placeholderPattern = Regex("\\{(\\w+)\\}")
 
+@Composable
+private fun rememberSystemMessageContent(
+    message: ChatMessageUi,
+    textStyle: TextStyle,
+    addLineBreaks: Boolean = false
+): Pair<androidx.compose.ui.text.AnnotatedString, Map<String, InlineTextContent>> {
+    val darkTheme = DisplayUtils.isDarkModeOn(LocalContext.current)
+    return remember(message, textStyle, addLineBreaks, darkTheme) {
+        buildSystemMessageContent(message, textStyle, darkTheme, addLineBreaks)
+    }
+}
+
 private fun buildSystemMessageContent(
     message: ChatMessageUi,
     textStyle: TextStyle,
+    darkTheme: Boolean,
     addLineBreaks: Boolean = false
 ): Pair<androidx.compose.ui.text.AnnotatedString, Map<String, InlineTextContent>> {
     val inlineContent = linkedMapOf<String, InlineTextContent>()
@@ -174,7 +186,9 @@ private fun buildSystemMessageContent(
                 messageParameters = message.messageParameters,
                 activeUserId = message.activeUserId,
                 activeUserBaseUrl = message.activeUserBaseUrl,
-                roomToken = message.roomToken
+                roomToken = message.roomToken,
+                authHeader = message.authHeader,
+                darkTheme = darkTheme
             )
             if (mention != null) {
                 val inlineId = "sysmsg-${message.id}-$mentionCounter"

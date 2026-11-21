@@ -165,6 +165,8 @@
     <string name="nc_call_timeout">Per 45 sekundes jokio atsakymo, bakstelėkite norėdami bandyti dar kartą</string>
     <string name="nc_call_unknown">%s skambutis</string>
     <string name="nc_call_video">%s vaizdo skambutis</string>
+    <string name="nc_call_view_mode_grid">Tinklelio rodinys</string>
+    <string name="nc_call_view_mode_speaker">Pranešėjo rodinys</string>
     <string name="nc_call_voice">%s baldo skambutis</string>
     <string name="nc_camera_permission_hint">Norėdami įjungti vaizdo ryšį, suteikite leidimą „Kamera“.</string>
     <string name="nc_cancel">Atsisakyti</string>
@@ -286,6 +288,7 @@
     <string name="nc_expire_messages">Pokalbių žinučių galiojimo pabaiga</string>
     <string name="nc_expire_messages_explanation">Pokalbių žinutės gali būti nebegaliojančios po tam tikro laiko. Pastaba: pokalbyje bendrinami failai nebus ištrinti savininkui, bet nebebus bendrinami pokalbyje.</string>
     <string name="nc_external_server_failed">Nepavyko gauti signalinio ryšio nustatymų</string>
+    <string name="nc_federated_user">Federacinis vartotojas</string>
     <string name="nc_federation_invitation_accept">Priimti</string>
     <string name="nc_federation_invitation_reject">Atmesti</string>
     <string name="nc_federation_invited_to_room">nuo %1$s, %2$s</string>
@@ -850,4 +853,4 @@
         <item quantity="many">%d balsų</item>
         <item quantity="other">%d balsas</item>
     </plurals>
-</resources>
+    </resources>

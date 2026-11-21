@@ -54,8 +54,10 @@ import com.nextcloud.talk.chat.ui.model.ChatMessageUi
 import com.nextcloud.talk.events.UserMentionClickEvent
 import com.nextcloud.talk.ui.theme.LocalViewThemeUtils
 import com.nextcloud.talk.ui.toDrawable
+import com.nextcloud.talk.ui.withAuthHeader
 import com.nextcloud.talk.utils.ActorAvatar
 import com.nextcloud.talk.utils.CharacterAvatarUtils
+import com.nextcloud.talk.utils.DisplayUtils
 import com.nextcloud.talk.utils.message.MarkdownTables
 import com.nextcloud.talk.utils.message.MessageUtils
 import io.noties.markwon.core.spans.LinkSpan
@@ -321,7 +323,8 @@ private fun applyMentionChips(
             mentionId = mentionId,
             isFederated = isFederated,
             activeUserBaseUrl = message.activeUserBaseUrl,
-            roomToken = message.roomToken
+            roomToken = message.roomToken,
+            darkTheme = DisplayUtils.isDarkModeOn(context)
         )
         val fallbackIconRes = resolveMentionFallbackIcon(
             MentionChipModel(
@@ -346,6 +349,7 @@ private fun applyMentionChips(
                 label = name,
                 fallbackDrawable = fallbackDrawable,
                 avatarUrl = avatarUrl,
+                authHeader = message.authHeader.takeIf { isFederated },
                 backgroundColor = bgColor,
                 labelColor = fgColor,
                 textSizePx = textSizePx,
@@ -406,6 +410,7 @@ private class MentionChipSpan(
     private val label: String,
     private val fallbackDrawable: Drawable,
     private val avatarUrl: String?,
+    private val authHeader: String?,
     private val backgroundColor: Int,
     private val labelColor: Int,
     private val textSizePx: Float,
@@ -425,6 +430,7 @@ private class MentionChipSpan(
         if (avatarUrl == null) return
         val request = ImageRequest.Builder(context)
             .data(avatarUrl)
+            .withAuthHeader(authHeader)
             .size(avatarSizePx.roundToInt())
             .transformations(CircleCropTransformation())
             .target { drawable ->

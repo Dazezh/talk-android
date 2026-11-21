@@ -159,6 +159,8 @@
     <string name="nc_call_timeout">Brak odpowiedzi przez 45 sekund, dotknij, aby spróbować ponownie</string>
     <string name="nc_call_unknown">%s połączenie</string>
     <string name="nc_call_video">%s połączenie wideo</string>
+    <string name="nc_call_view_mode_grid">Widok siatki</string>
+    <string name="nc_call_view_mode_speaker">Widok mówcy</string>
     <string name="nc_call_voice">%s połączenie głosowe</string>
     <string name="nc_camera_permission_hint">Aby umożliwić komunikację wideo, należy udzielić dostępu dla \"Kamera\".</string>
     <string name="nc_cancel">Anuluj</string>
@@ -266,6 +268,7 @@
     <string name="nc_expire_messages">Wygasa wiadomości na czacie</string>
     <string name="nc_expire_messages_explanation">Wiadomości na czacie mogą wygasnąć po pewnym czasie. Uwaga: pliki udostępnione na czacie nie zostaną usunięte dla właściciela, ale nie będą już udostępniane w rozmowie.</string>
     <string name="nc_external_server_failed">Nie udało się pobrać ustawień sygnałowych</string>
+    <string name="nc_federated_user">Użytkownik sfederowany</string>
     <string name="nc_federation_invitation_accept">Akceptuj</string>
     <string name="nc_federation_invitation_reject">Odrzuć</string>
     <string name="nc_federation_invited_to_room">od %1$s o %2$s</string>
@@ -794,4 +797,4 @@
         <item quantity="many">%d głosów</item>
         <item quantity="other">%d głosów</item>
     </plurals>
-</resources>
+    </resources>

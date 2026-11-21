@@ -137,6 +137,8 @@
     <string name="nc_call_timeout">Han passat 45 segons i no hi ha hagut cap resposta, feu un toc i torneu-ho a provar</string>
     <string name="nc_call_unknown">%strucada </string>
     <string name="nc_call_video">%s trucada de vídeo</string>
+    <string name="nc_call_view_mode_grid">Visualització de quadrícula</string>
+    <string name="nc_call_view_mode_speaker">Visualització de qui parla</string>
     <string name="nc_call_voice">%s trucada de veu</string>
     <string name="nc_camera_permission_hint">Per habilitar la comunicació per vídeo,  concediu el permís de \"Càmera\".</string>
     <string name="nc_cancel">Cancel·la</string>
@@ -238,6 +240,7 @@
     <string name="nc_expire_messages">Fes caducar els missatges del xat</string>
     <string name="nc_expire_messages_explanation">Els missatges de xat poden caducar al cap d\'un període de temps determinat. Nota: els fitxers compartits al xat no se suprimiran per al propietari, però ja no es compartiran a la conversa.</string>
     <string name="nc_external_server_failed">No s\'ha pogut obtenir la configuració de senyalització</string>
+    <string name="nc_federated_user">Usuari federat</string>
     <string name="nc_federation_invitation_accept">Accepta</string>
     <string name="nc_federation_invitation_reject">Rebutja</string>
     <string name="nc_federation_no_invitations">No hi ha cap invitació pendent</string>
@@ -477,6 +480,7 @@
     <string name="nc_show_notification_warning_description">Quan les notificacions no estan configurades correctament, mostra un avís regular</string>
     <string name="nc_show_notification_warning_title">Mostra un avís regular de notificacions</string>
     <string name="nc_sort_by">Ordena per</string>
+    <string name="nc_start_screen_sharing">Comparteix la pantalla</string>
     <string name="nc_start_time">Hora d\'inici</string>
     <string name="nc_switch_account">Canvia el compte</string>
     <string name="nc_team">Equip</string>
@@ -648,4 +652,4 @@
         <item quantity="one">%d vot</item>
         <item quantity="other">%d vots</item>
     </plurals>
-</resources>
+    </resources>

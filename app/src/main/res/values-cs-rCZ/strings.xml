@@ -818,4 +818,5 @@
         <item quantity="many">%dnových zpráv</item>
         <item quantity="other">%dnových zpráv</item>
     </plurals>
+    <string name="nc_federated_user">Federovaný uživatel</string>
 </resources>
